@@ -1,0 +1,28 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+.env.*
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+*.tsbuildinfo
+
+# Runtime PIDs
+.brainch-*.pid

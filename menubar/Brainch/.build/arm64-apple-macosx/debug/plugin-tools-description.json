@@ -1,0 +1,774 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.xctest/Contents/MacOS/BrainchPackageTests",
+      "packagePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch",
+      "productName" : "BrainchPackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.Brainch-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/sources",
+      "importPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/BrainchApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedCardView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/MenuBarView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/StatusIcon.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "Brainch",
+      "moduleOutputPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/Brainch.swiftmodule",
+      "objects" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swift.o",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "Brainch_main",
+        "-color-diagnostics",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "brainch"
+      ],
+      "outputFileMapPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/Brainch.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/APIClient.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/BrainchApp.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedCardView.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedStore.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/MenuBarView.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/Models.swift",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/StatusIcon.swift"
+      ],
+      "tempsPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.BrainchPackageTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/sources",
+      "importPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/BrainchTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "BrainchPackageTests",
+      "moduleOutputPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/BrainchPackageTests.swiftmodule",
+      "objects" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/include/BrainchPackageTests-Swift.h",
+        "-color-diagnostics",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "brainch"
+      ],
+      "outputFileMapPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/BrainchPackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.BrainchTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/sources",
+      "importPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Tests/BrainchTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "BrainchTests",
+      "moduleOutputPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/BrainchTests.swiftmodule",
+      "objects" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-color-diagnostics",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "brainch"
+      ],
+      "outputFileMapPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules/BrainchTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/aaryan/Desktop/Trace/menubar/Brainch/Tests/BrainchTests.swift"
+      ],
+      "tempsPath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "Brainch" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "Brainch",
+      "-package-name",
+      "brainch",
+      "-c",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/APIClient.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/BrainchApp.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedCardView.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedStore.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/MenuBarView.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/Models.swift",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/StatusIcon.swift",
+      "-I",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "Brainch_main",
+      "-color-diagnostics",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "brainch",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "BrainchPackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "BrainchPackageTests",
+      "-package-name",
+      "brainch",
+      "-c",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift",
+      "-I",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/include/BrainchPackageTests-Swift.h",
+      "-color-diagnostics",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "brainch",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "BrainchTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "BrainchTests",
+      "-package-name",
+      "brainch",
+      "-c",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/Tests/BrainchTests.swift",
+      "-I",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-color-diagnostics",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "brainch",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "Brainch" : [
+
+    ],
+    "BrainchPackageTests" : [
+      "BrainchTests",
+      "Brainch"
+    ],
+    "BrainchTests" : [
+      "Brainch"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch-entitlement.plist"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/APIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/BrainchApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedCardView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedStore.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/MenuBarView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/StatusIcon.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/sources"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.product/Objects.LinkFileList"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/sources"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchPackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/Tests/BrainchTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/sources"
+    },
+    "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "": {
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/primary.swiftdeps"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/APIClient.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/APIClient.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/BrainchApp.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/BrainchApp.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedCardView.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedCardView.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/FeedStore.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/FeedStore.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/MenuBarView.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/MenuBarView.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/Models.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/Models.dia"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Sources/StatusIcon.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/Brainch.build/StatusIcon.dia"
+  }
+}

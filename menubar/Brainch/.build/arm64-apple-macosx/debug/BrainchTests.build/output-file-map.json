@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/primary.swiftdeps"
+  },
+  "/Users/aaryan/Desktop/Trace/menubar/Brainch/Tests/BrainchTests.swift": {
+    "dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.d",
+    "object": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.swift.o",
+    "swiftmodule": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.swiftdeps",
+    "diagnostics": "/Users/aaryan/Desktop/Trace/menubar/Brainch/.build/arm64-apple-macosx/debug/BrainchTests.build/BrainchTests.dia"
+  }
+}
