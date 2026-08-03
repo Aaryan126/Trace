@@ -22,8 +22,8 @@ const isMainModule =
 if (isMainModule) {
   const { createServer: start } = await import('./server.js');
   const server = await start();
-  const port = Number(process.env.BRAINCH_PORT) || 3333;
+  const port = Number(process.env.TRACE_PORT) || 3333;
   await server.listen({ port, host: '127.0.0.1' });
   const addr = server.addresses()[0];
-  console.log(`Brainch API running on http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : port}`);
+  console.log(`Trace API running on http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : port}`);
 }

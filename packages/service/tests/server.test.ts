@@ -9,7 +9,7 @@ import {
   SourceItemRepository,
   MergeEventRepository,
   FeedEventRepository,
-} from '@brainch/core';
+} from '@trace/core';
 import { createServer } from '../src/server.js';
 
 // ---------------------------------------------------------------------------

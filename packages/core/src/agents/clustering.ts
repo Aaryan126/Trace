@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3';
-import type { BrainchAI } from '../ai/openai-client.js';
+import type { TraceAI } from '../ai/openai-client.js';
 import type { ThreadRepository } from '../db/repositories/thread-repository.js';
 import type { BranchRepository } from '../db/repositories/branch-repository.js';
 import { CommitRepository } from '../db/repositories/commit-repository.js';
@@ -15,7 +15,7 @@ export class ClusteringAgent {
 
   constructor(
     private db: Database,
-    private ai: BrainchAI,
+    private ai: TraceAI,
     private threadRepo: ThreadRepository,
     private branchRepo: BranchRepository,
     private sourceItemRepo: SourceItemRepository,

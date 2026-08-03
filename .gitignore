@@ -23,6 +23,7 @@ pnpm-debug.log*
 
 # Build
 *.tsbuildinfo
+.build/
 
 # Runtime PIDs
-.brainch-*.pid
+.trace-*.pid

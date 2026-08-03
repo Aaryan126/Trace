@@ -1,5 +1,5 @@
 {
-  "name": "brainch",
+  "name": "trace",
   "private": true,
   "scripts": {
     "dev": "echo 'Run dev:service and dev:dashboard in separate terminals' && exit 0",
@@ -7,7 +7,7 @@
     "dev:dashboard": "cd packages/dashboard && npx vite",
     "build": "pnpm -r run build",
     "build:dashboard": "cd packages/dashboard && npx vite build",
-    "build:menubar": "cd menubar/Brainch && swift build",
+    "build:menubar": "cd menubar/Trace && swift build",
     "test": "vitest",
     "lint": "eslint packages/",
     "format": "prettier --write 'packages/**/*.{ts,tsx}'"

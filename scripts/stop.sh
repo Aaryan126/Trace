@@ -1,20 +1,20 @@
 #!/bin/bash
-# Brainch — Stop everything with one command
+# Trace — Stop everything with one command
 
-echo "🛑 Stopping Brainch..."
+echo "🛑 Stopping Trace..."
 
 # 1. Stop API server
-if [ -f .brainch-service.pid ]; then
-  kill $(cat .brainch-service.pid) 2>/dev/null && echo "→ API server stopped" || echo "→ API server not running"
-  rm -f .brainch-service.pid
+if [ -f .trace-service.pid ]; then
+  kill $(cat .trace-service.pid) 2>/dev/null && echo "→ API server stopped" || echo "→ API server not running"
+  rm -f .trace-service.pid
 else
   echo "→ No API server PID found (may not be running)"
 fi
 
 # 2. Stop Dashboard
-if [ -f .brainch-dashboard.pid ]; then
-  kill $(cat .brainch-dashboard.pid) 2>/dev/null && echo "→ Dashboard stopped" || echo "→ Dashboard not running"
-  rm -f .brainch-dashboard.pid
+if [ -f .trace-dashboard.pid ]; then
+  kill $(cat .trace-dashboard.pid) 2>/dev/null && echo "→ Dashboard stopped" || echo "→ Dashboard not running"
+  rm -f .trace-dashboard.pid
 else
   echo "→ No dashboard PID found (may not be running)"
 fi
@@ -33,4 +33,4 @@ if command -v openclaw &> /dev/null; then
 fi
 
 echo ""
-echo "✅ Brainch fully stopped."
+echo "✅ Trace fully stopped."

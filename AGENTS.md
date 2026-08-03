@@ -1,8 +1,8 @@
-# Brainch — Agent Guidelines
+# Trace — Agent Guidelines
 
 ## Project Context
 
-**Brainch** is "Git for your recurring decisions." It treats personal decisions (tech choices, vendor picks, etc.) as first-class, revisitable objects — with threads, commits, branches, merges, regret markers, and diffs — mirroring how git treats code changes.
+**Trace** is "Git for your recurring decisions." It treats personal decisions (tech choices, vendor picks, etc.) as first-class, revisitable objects — with threads, commits, branches, merges, regret markers, and diffs — mirroring how git treats code changes.
 
 - **Runtime:** OpenClaw daemon (self-hosted, Mac background process)
 - **Model:** GPT-5.4 via OpenAI API

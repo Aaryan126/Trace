@@ -9,7 +9,7 @@ import { FeedEventRepository } from '../src/db/repositories/feed-event-repositor
 import { ClusteringAgent } from '../src/agents/clustering.js';
 import { SynthesisAgent } from '../src/agents/synthesis.js';
 import { CorrectionAgent } from '../src/agents/correction.js';
-import type { BrainchAI } from '../src/ai/openai-client.js';
+import type { TraceAI } from '../src/ai/openai-client.js';
 
 let db: Database.Database;
 let threadRepo: ThreadRepository;
@@ -18,14 +18,14 @@ let commitRepo: CommitRepository;
 let sourceItemRepo: SourceItemRepository;
 let feedEventRepo: FeedEventRepository;
 
-function mockAI(overrides: Partial<BrainchAI> = {}): BrainchAI {
+function mockAI(overrides: Partial<TraceAI> = {}): TraceAI {
   return {
     clusterItem: vi.fn(),
     synthesizeCommit: vi.fn(),
     generateDiff: vi.fn(),
     extractFromScreenshot: vi.fn(),
     ...overrides,
-  } as unknown as BrainchAI;
+  } as unknown as TraceAI;
 }
 
 function createItem(opts: { rawText?: string; capturedAt?: string; threadId?: string; processed?: boolean } = {}) {

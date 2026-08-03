@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import type { SourceItemRepository } from '@brainch/core';
+import type { SourceItemRepository } from '@trace/core';
 import { MetadataRepository } from './metadata-repository.js';
 
 // ─── Configuration ──────────────────────────────────────────────────────────

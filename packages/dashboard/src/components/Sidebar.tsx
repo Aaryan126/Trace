@@ -15,7 +15,7 @@ export function Sidebar({ unreadCount = 0 }: SidebarProps) {
     <aside className="flex h-screen w-56 flex-col border-r border-[#30363d] bg-[#0d1117]">
       <div className="border-b border-[#30363d] px-4 py-4">
         <h1 className="text-base font-bold text-[#e6edf3] tracking-tight">
-          <span className="text-[#3fb950]">▸</span> Brainch
+          <span className="text-[#3fb950]">▸</span> Trace
         </h1>
       </div>
       <nav className="flex-1 px-2 py-3 space-y-1">

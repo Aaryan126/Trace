@@ -1,0 +1,17 @@
+{
+  "screenshotDir": "~/Desktop",
+  "screenshotExtensions": [".png", ".jpg", ".jpeg"],
+  "browserHistoryPollIntervalMs": 300000,
+  "quietWindowHours": 24,
+  "synthesisMinItems": 2,
+  "clusteringConfidenceThreshold": 0.6,
+  "resurfacingDigestWindowDays": 7,
+  "dashboardPort": 3333,
+  "openai": {
+    "model": "gpt-5.4",
+    "visionModel": "gpt-5.4"
+  },
+  "db": {
+    "path": "~/.trace/trace.sqlite"
+  }
+}

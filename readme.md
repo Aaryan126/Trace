@@ -1,10 +1,10 @@
-# Brainch — Git for your recurring decisions
+# Trace — Git for your recurring decisions
 
 ## Overview
 
-Brainch is a tool that treats your personal decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, and context.
+Trace is a tool that treats your personal decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, and context.
 
-Developers constantly re-research the same decisions: "Postgres or Mongo?", "Which auth provider?", "Should I use this library again?" — and lose track of what they concluded last time and why. Brainch fixes that.
+Developers constantly re-research the same decisions: "Postgres or Mongo?", "Which auth provider?", "Should I use this library again?" — and lose track of what they concluded last time and why. Trace fixes that.
 
 ## Core Concepts
 
@@ -90,13 +90,13 @@ Developers constantly re-research the same decisions: "Postgres or Mongo?", "Whi
 
 3. **Create runtime directory:**
    ```bash
-   mkdir -p ~/.brainch
-   cp brainch.config.json ~/.brainch/config.json
+   mkdir -p ~/.trace
+   cp trace.config.json ~/.trace/config.json
    ```
 
 4. **Install OpenClaw skills (optional, for scheduled agents):**
    ```bash
-   cp -r skills/brainch-* ~/.openclaw/workspace/skills/
+   cp -r skills/trace-* ~/.openclaw/workspace/skills/
    bash scripts/setup-cron.sh
    ```
 
@@ -129,7 +129,7 @@ Opens on `http://127.0.0.1:5173`
 
 **Menu Bar App:**
 ```bash
-cd menubar/Brainch
+cd menubar/Trace
 swift build
 swift run
 ```
@@ -152,7 +152,7 @@ openclaw daemon start      # Start it again when needed
 openclaw daemon restart    # Restart after config changes
 ```
 
-**When to run it:** Only needed when you want the scheduled Brainch agents (clustering, synthesis, resurfacing) to run automatically on their cron schedules. If you're just using the dashboard and API server manually, the daemon isn't required.
+**When to run it:** Only needed when you want the scheduled Trace agents (clustering, synthesis, resurfacing) to run automatically on their cron schedules. If you're just using the dashboard and API server manually, the daemon isn't required.
 
 **After testing:** Stop the daemon to save resources:
 ```bash
@@ -203,6 +203,6 @@ packages/
 ├── service/           # API server (Fastify) + ingestion watchers
 └── dashboard/         # React web UI (Vite + Tailwind)
 skills/                # OpenClaw skill definitions
-menubar/Brainch/       # Native SwiftUI menu bar app
+menubar/Trace/       # Native SwiftUI menu bar app
 scripts/               # Setup and start scripts
 ```

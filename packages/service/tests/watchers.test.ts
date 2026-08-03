@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import {
   createInMemoryDatabase,
   SourceItemRepository,
-} from '@brainch/core';
-import type { BrainchAI } from '@brainch/core';
+} from '@trace/core';
+import type { TraceAI } from '@trace/core';
 import { MetadataRepository } from '../src/watchers/metadata-repository.js';
 import { ScreenshotWatcher } from '../src/watchers/screenshot.js';
 import {
@@ -47,7 +47,7 @@ function createMockAI() {
       url: 'https://example.com',
       appSource: 'Chrome',
     }),
-  } as unknown as BrainchAI;
+  } as unknown as TraceAI;
 }
 
 // ─── Screenshot Watcher Tests ────────────────────────────────────────────────

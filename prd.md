@@ -1,4 +1,4 @@
-# PRD — Brainch (working title)
+# PRD — Trace
 ### Git for your recurring decisions
 
 ---
@@ -7,7 +7,7 @@
 
 Developers (and knowledge workers generally) re-research the same recurring decisions over and over — "Postgres or Mongo," "which auth provider," "should I take this job/vendor/apartment" — and have no memory of what they concluded last time, why, or whether it worked out. Notes apps store facts; they don't store *verdicts*. Bookmarks store links; they don't store *reasoning*. Nothing treats "a decision you've already made" as a first-class, revisitable object — the way git treats a change as a first-class, revisitable object.
 
-Git solved this for code: every change is committed with a reason, history is inspectable, and you can see exactly when and why something diverged. Brainch applies that same model to your own decision-making.
+Git solved this for code: every change is committed with a reason, history is inspectable, and you can see exactly when and why something diverged. Trace applies that same model to your own decision-making.
 
 ## 2. Target user
 
@@ -32,7 +32,7 @@ Primary: **developers** who already live in the browser, VS Code, and Obsidian/n
 
 ## 5. System architecture
 
-**Runtime substrate: OpenClaw**, self-hosted, running as a background daemon on the user's Mac. Brainch is implemented as a custom OpenClaw skill + a purpose-built data layer, not a runtime built from scratch — this gets the heartbeat scheduler, persistent memory, and skill framework for free so build time goes into the actual novel logic.
+**Runtime substrate: OpenClaw**, self-hosted, running as a background daemon on the user's Mac. Trace is implemented as a custom OpenClaw skill + a purpose-built data layer, not a runtime built from scratch — this gets the heartbeat scheduler, persistent memory, and skill framework for free so build time goes into the actual novel logic.
 
 **Model: OpenAI GPT-5.4** via the OpenAI API, used for OCR-adjacent extraction/cleanup, thread synthesis, similarity/clustering judgments, and resurfacing copy generation.
 

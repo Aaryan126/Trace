@@ -26,7 +26,7 @@ vi.mock('openai', () => {
   return { default: MockOpenAI };
 });
 
-import { BrainchAI, createBrainchAI, _resetSingleton } from '../src/ai/openai-client.js';
+import { TraceAI, createTraceAI, _resetSingleton } from '../src/ai/openai-client.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,13 +42,13 @@ function jsonResponse(payload: unknown) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('BrainchAI', () => {
-  let ai: BrainchAI;
+describe('TraceAI', () => {
+  let ai: TraceAI;
 
   beforeEach(() => {
     mockCreate.mockReset();
     _resetSingleton();
-    ai = new BrainchAI({ apiKey: TEST_KEY });
+    ai = new TraceAI({ apiKey: TEST_KEY });
   });
 
   // ── Constructor / config ──────────────────────────────────────────────────
@@ -58,7 +58,7 @@ describe('BrainchAI', () => {
       const orig = process.env.OPENAI_API_KEY;
       delete process.env.OPENAI_API_KEY;
       try {
-        expect(() => new BrainchAI()).toThrow(/API key/i);
+        expect(() => new TraceAI()).toThrow(/API key/i);
       } finally {
         if (orig !== undefined) process.env.OPENAI_API_KEY = orig;
       }
@@ -68,7 +68,7 @@ describe('BrainchAI', () => {
       const orig = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = 'env-key-123';
       try {
-        expect(() => new BrainchAI()).not.toThrow();
+        expect(() => new TraceAI()).not.toThrow();
       } finally {
         if (orig === undefined) delete process.env.OPENAI_API_KEY;
         else process.env.OPENAI_API_KEY = orig;
@@ -79,7 +79,7 @@ describe('BrainchAI', () => {
       const origModel = process.env.OPENAI_MODEL;
       process.env.OPENAI_MODEL = 'env-model';
       try {
-        const instance = new BrainchAI({ apiKey: TEST_KEY, model: 'explicit-model' });
+        const instance = new TraceAI({ apiKey: TEST_KEY, model: 'explicit-model' });
         mockCreate.mockResolvedValueOnce(
           jsonResponse({ decision: 'new', threadId: null, confidence: 1 }),
         );
@@ -97,7 +97,7 @@ describe('BrainchAI', () => {
       process.env.OPENAI_MODEL = 'env-text-model';
       process.env.OPENAI_VISION_MODEL = 'env-vision-model';
       try {
-        const instance = new BrainchAI({ apiKey: TEST_KEY });
+        const instance = new TraceAI({ apiKey: TEST_KEY });
 
         // Verify text model via clusterItem
         mockCreate.mockResolvedValueOnce(
@@ -154,7 +154,7 @@ describe('BrainchAI', () => {
     });
 
     it('uses the vision model, not the text model', async () => {
-      const instance = new BrainchAI({
+      const instance = new TraceAI({
         apiKey: TEST_KEY,
         model: 'text-model',
         visionModel: 'vision-model',
@@ -336,17 +336,17 @@ describe('BrainchAI', () => {
 
   // ── Singleton factory ──────────────────────────────────────────────────────
 
-  describe('createBrainchAI', () => {
+  describe('createTraceAI', () => {
     it('returns the same instance on repeated calls', () => {
-      const a = createBrainchAI({ apiKey: TEST_KEY });
-      const b = createBrainchAI();
+      const a = createTraceAI({ apiKey: TEST_KEY });
+      const b = createTraceAI();
       expect(a).toBe(b);
     });
 
     it('returns a fresh instance after reset', () => {
-      const a = createBrainchAI({ apiKey: TEST_KEY });
+      const a = createTraceAI({ apiKey: TEST_KEY });
       _resetSingleton();
-      const b = createBrainchAI({ apiKey: TEST_KEY });
+      const b = createTraceAI({ apiKey: TEST_KEY });
       expect(a).not.toBe(b);
     });
   });

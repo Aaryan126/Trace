@@ -14,8 +14,8 @@ import {
   MergeEventRepository,
   FeedEventRepository,
   CorrectionAgent,
-} from '@brainch/core';
-import type { Branch, Commit, MergeEvent, SourceItem } from '@brainch/core';
+} from '@trace/core';
+import type { Branch, Commit, MergeEvent, SourceItem } from '@trace/core';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -60,7 +60,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   if (options._db) {
     db = options._db;
   } else {
-    const dbPath = options.dbPath ?? join(homedir(), '.brainch', 'brainch.sqlite');
+    const dbPath = options.dbPath ?? join(homedir(), '.trace', 'trace.sqlite');
     mkdirSync(dirname(dbPath), { recursive: true });
     db = createDatabase(dbPath);
   }

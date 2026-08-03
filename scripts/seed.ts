@@ -1,4 +1,4 @@
-// Seed script for Brainch — populates the database with realistic test data
+// Seed script for Trace — populates the database with realistic test data
 // and demonstrates the full pipeline (ingestion → clustering → synthesis → resurfacing)
 //
 // Usage:  npx tsx scripts/seed.ts
@@ -8,13 +8,13 @@ import Database from 'better-sqlite3';
 import { mkdirSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { createDatabase } from '@brainch/core';
+import { createDatabase } from '@trace/core';
 
 // ── Resolve DB path ──────────────────────────────────────────────────────────
-const BRAINCH_DIR = join(homedir(), '.brainch');
-const DB_PATH = join(BRAINCH_DIR, 'brainch.sqlite');
+const TRACE_DIR = join(homedir(), '.trace');
+const DB_PATH = join(TRACE_DIR, 'trace.sqlite');
 
-mkdirSync(BRAINCH_DIR, { recursive: true });
+mkdirSync(TRACE_DIR, { recursive: true });
 
 // Wipe existing DB for a clean seed (idempotent reruns)
 if (existsSync(DB_PATH)) {
@@ -26,7 +26,7 @@ if (existsSync(DB_PATH)) {
 
 const db = createDatabase(DB_PATH);
 
-console.log('🧠 Brainch Seed — Populating with test data...\n');
+console.log('🧠 Trace Seed — Populating with test data...\n');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const uuid = (): string => crypto.randomUUID();

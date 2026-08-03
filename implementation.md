@@ -1,4 +1,4 @@
-# Implementation Log — Brainch
+# Implementation Log — Trace
 
 This file tracks the latest implementation progress, decisions made, and technical notes. Agents should update this file as code is written and milestones are reached.
 
@@ -61,6 +61,7 @@ Record key implementation decisions here as they are made.
 | 2026-07-26 | pnpm monorepo scaffold | Switched from npm to pnpm for faster installs, stricter linking, and reliable workspace resolution. better-sqlite3 native build approved. |
 | 2026-07-26 | pnpm workspaces, Vitest, Fastify, Tailwind 4, SPM for menu bar app | Final tech stack confirmed: pnpm workspaces for monorepo management, Vitest for testing, Fastify for the service layer, Tailwind CSS 4 for the dashboard, and Swift Package Manager (SPM) for the native menu bar app. |
 | 2026-08-03 | Unified start/stop scripts | Added `scripts/stop.sh` and rewrote `scripts/start.sh` to manage all components (OpenClaw daemon, API server, Dashboard) with PID files for external stop support. |
+| 2026-08-03 | Rename product to Trace | Renamed product copy, package identifiers, runtime paths, environment variables, OpenClaw skills, and the Swift package consistently; stopped tracking generated Swift build artifacts. |
 
 ---
 
@@ -88,10 +89,10 @@ MergeEvent
 ## Implementation Notes
 
 ### 2026-07-26 — Monorepo Scaffold
-- Created pnpm workspace with three packages: `@brainch/core`, `@brainch/service`, `@brainch/dashboard`.
+- Created pnpm workspace with three packages: `@trace/core`, `@trace/service`, `@trace/dashboard`.
 - Root dev tooling: TypeScript 5.x (strict, NodeNext), Vitest, ESLint 9 (flat config), Prettier.
 - Core: better-sqlite3, openai, uuid.
-- Service: fastify, @fastify/cors, chokidar, workspace link to @brainch/core.
+- Service: fastify, @fastify/cors, chokidar, workspace link to @trace/core.
 - Dashboard: React 19, React Router 7, Vite 6, Tailwind CSS 4 (via @tailwindcss/vite).
 - Skills directory: ingestion, clustering, synthesis, resurfacing (all placeholder).
 - All three placeholder tests pass via `pnpm test`.
@@ -99,7 +100,7 @@ MergeEvent
 ### 2026-08-03 — Unified Start/Stop Scripts
 - Rewrote `scripts/start.sh` to manage OpenClaw daemon, API server, and dashboard in one command.
 - Created `scripts/stop.sh` for stopping all services from a separate terminal using PID files.
-- Added `.brainch-*.pid` to `.gitignore`.
+- Added `.trace-*.pid` to `.gitignore`.
 - Updated `readme.md` Quick Start section to reference the stop script.
 
 ### 2026-08-03 — Fix Ctrl+C Not Stopping OpenClaw Daemon
@@ -109,6 +110,10 @@ MergeEvent
 - Replaced silent `openclaw daemon stop 2>/dev/null || true` with verbose stop + LaunchAgent fallback (`launchctl unload ~/Library/LaunchAgents/ai.openclaw.gateway.plist`).
 - Added 1-second sleep before daemon stop to let child processes terminate first.
 - Applied same robust stop logic to `scripts/stop.sh`.
+
+### 2026-08-03 — Product Rename to Trace
+- Renamed the product, `@trace/*` workspace packages, `TRACE_*` environment variables, `~/.trace` runtime directory, config file, OpenClaw skills, and Swift menu bar package.
+- Removed generated Swift `.build` artifacts from version control and added `.build/` to `.gitignore`.
 
 ---
 

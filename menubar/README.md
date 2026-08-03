@@ -1,6 +1,6 @@
-# Brainch Menu Bar App
+# Trace Menu Bar App
 
-Native macOS menu bar app for ambient Brainch notifications.
+Native macOS menu bar app for ambient Trace notifications.
 
 ## Requirements
 - macOS 13+ (Ventura)
@@ -8,7 +8,7 @@ Native macOS menu bar app for ambient Brainch notifications.
 
 ## Build & Run
 ```bash
-cd menubar/Brainch
+cd menubar/Trace
 swift build
 swift run
 ```

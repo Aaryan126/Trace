@@ -2,7 +2,7 @@ import { watch, type FSWatcher } from 'chokidar';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { homedir } from 'node:os';
-import type { BrainchAI, SourceItemRepository } from '@brainch/core';
+import type { TraceAI, SourceItemRepository } from '@trace/core';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ export class ScreenshotWatcher {
 
   constructor(
     config: Partial<ScreenshotWatcherConfig>,
-    private readonly ai: BrainchAI,
+    private readonly ai: TraceAI,
     private readonly sourceItemRepo: SourceItemRepository,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };

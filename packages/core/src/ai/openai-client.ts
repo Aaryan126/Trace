@@ -101,7 +101,7 @@ function parseJSONResponse<T>(content: string | null | undefined, methodName: st
 
 // ─── Main class ───────────────────────────────────────────────────────────────
 
-export class BrainchAI {
+export class TraceAI {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly visionModel: string;
@@ -192,11 +192,11 @@ export class BrainchAI {
 
 // ─── Singleton factory ────────────────────────────────────────────────────────
 
-let singleton: BrainchAI | null = null;
+let singleton: TraceAI | null = null;
 
-export function createBrainchAI(config?: Partial<OpenAIConfig>): BrainchAI {
+export function createTraceAI(config?: Partial<OpenAIConfig>): TraceAI {
   if (!singleton) {
-    singleton = new BrainchAI(config);
+    singleton = new TraceAI(config);
   }
   return singleton;
 }

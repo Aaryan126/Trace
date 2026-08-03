@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-export interface BrainchConfig {
+export interface TraceConfig {
   screenshotDir: string;
   screenshotExtensions: string[];
   browserHistoryPollIntervalMs: number;
@@ -20,7 +20,7 @@ export interface BrainchConfig {
   };
 }
 
-const DEFAULTS: BrainchConfig = {
+const DEFAULTS: TraceConfig = {
   screenshotDir: '~/Desktop',
   screenshotExtensions: ['.png', '.jpg', '.jpeg'],
   browserHistoryPollIntervalMs: 300_000,
@@ -34,7 +34,7 @@ const DEFAULTS: BrainchConfig = {
     visionModel: 'gpt-5.4',
   },
   db: {
-    path: '~/.brainch/brainch.sqlite',
+    path: '~/.trace/trace.sqlite',
   },
 };
 
@@ -45,7 +45,7 @@ function expandTilde(value: string): string {
   return value;
 }
 
-function expandPaths(config: BrainchConfig): BrainchConfig {
+function expandPaths(config: TraceConfig): TraceConfig {
   return {
     ...config,
     screenshotDir: expandTilde(config.screenshotDir),
@@ -80,38 +80,38 @@ function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial
   return result;
 }
 
-function readJsonFile(filePath: string): Partial<BrainchConfig> | null {
+function readJsonFile(filePath: string): Partial<TraceConfig> | null {
   try {
     const raw = readFileSync(filePath, 'utf-8');
-    return JSON.parse(raw) as Partial<BrainchConfig>;
+    return JSON.parse(raw) as Partial<TraceConfig>;
   } catch {
     return null;
   }
 }
 
-export function loadConfig(configPath?: string): BrainchConfig {
+export function loadConfig(configPath?: string): TraceConfig {
   const candidates: string[] = [];
 
   if (configPath) {
     candidates.push(resolve(configPath));
   }
 
-  candidates.push(join(homedir(), '.brainch', 'config.json'));
+  candidates.push(join(homedir(), '.trace', 'config.json'));
 
   // Project root fallback: walk up from this file's location
-  // In compiled output: dist/config.js -> ../../brainch.config.json
-  // In source: src/config.ts -> ../../brainch.config.json
+  // In compiled output: dist/config.js -> ../../trace.config.json
+  // In source: src/config.ts -> ../../trace.config.json
   const projectRoot = resolve(import.meta.dirname, '..', '..');
-  candidates.push(join(projectRoot, 'brainch.config.json'));
+  candidates.push(join(projectRoot, 'trace.config.json'));
 
-  let fileConfig: Partial<BrainchConfig> | null = null;
+  let fileConfig: Partial<TraceConfig> | null = null;
   for (const candidate of candidates) {
     fileConfig = readJsonFile(candidate);
     if (fileConfig) break;
   }
 
   const merged = fileConfig
-    ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fileConfig as unknown as Record<string, unknown>) as unknown as BrainchConfig
+    ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fileConfig as unknown as Record<string, unknown>) as unknown as TraceConfig
     : { ...DEFAULTS };
 
   return expandPaths(merged);

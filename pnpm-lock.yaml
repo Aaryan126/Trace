@@ -95,7 +95,7 @@ importers:
 
   packages/service:
     dependencies:
-      '@brainch/core':
+      '@trace/core':
         specifier: workspace:*
         version: link:../core
       '@fastify/cors':

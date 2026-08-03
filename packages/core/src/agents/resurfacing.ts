@@ -1,4 +1,4 @@
-import type { BrainchAI } from '../ai/openai-client.js';
+import type { TraceAI } from '../ai/openai-client.js';
 import type { ThreadRepository } from '../db/repositories/thread-repository.js';
 import type { BranchRepository } from '../db/repositories/branch-repository.js';
 import type { CommitRepository } from '../db/repositories/commit-repository.js';
@@ -16,7 +16,7 @@ const DEFAULT_CONFIG: ResurfacingConfig = {
 
 export class ResurfacingAgent {
   constructor(
-    private ai: BrainchAI,
+    private ai: TraceAI,
     private config: Partial<ResurfacingConfig> = {},
     private threadRepo: ThreadRepository,
     private branchRepo: BranchRepository,

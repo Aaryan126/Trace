@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { loadConfig, type BrainchConfig } from '../src/config.js';
+import { loadConfig, type TraceConfig } from '../src/config.js';
 
 describe('loadConfig', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `brainch-config-test-${Date.now()}`);
+    tempDir = join(tmpdir(), `trace-config-test-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
   });
 
@@ -28,7 +28,7 @@ describe('loadConfig', () => {
   });
 
   it('reads and merges a partial config file', () => {
-    const partialConfig: Partial<BrainchConfig> = {
+    const partialConfig: Partial<TraceConfig> = {
       dashboardPort: 4000,
       openai: {
         model: 'gpt-6',
@@ -52,14 +52,14 @@ describe('loadConfig', () => {
     const configPath = join(tempDir, 'config.json');
     writeFileSync(
       configPath,
-      JSON.stringify({ screenshotDir: '~/Pictures', db: { path: '~/data/brainch.sqlite' } }),
+      JSON.stringify({ screenshotDir: '~/Pictures', db: { path: '~/data/trace.sqlite' } }),
     );
 
     const config = loadConfig(configPath);
     expect(config.screenshotDir).not.toContain('~');
     expect(config.db.path).not.toContain('~');
     expect(config.screenshotDir).toMatch(/Pictures$/);
-    expect(config.db.path).toMatch(/data\/brainch\.sqlite$/);
+    expect(config.db.path).toMatch(/data\/trace\.sqlite$/);
   });
 
   it('uses explicit configPath over fallback locations', () => {
