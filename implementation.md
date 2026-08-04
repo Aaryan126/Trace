@@ -6,7 +6,7 @@ This file tracks the latest implementation progress, decisions made, and technic
 
 ## Current Status
 
-**Phase:** Autonomous Trace v4 implemented — canvas-first research stories, source-backed comparisons, resumable sessions, Chrome visual capture, checkpoints, audit, and recovery scheduling
+**Phase:** Autonomous Trace v5 implemented — closed decision/outcome loops, deduplicated autonomous research, privacy-first capture, canvas audit, and read-only Qoder MCP retrieval
 **Last Updated:** 2026-08-04
 
 ---
@@ -20,14 +20,14 @@ This file tracks the latest implementation progress, decisions made, and technic
 | OpenClaw skill scaffold | Done | |
 | Screenshot watcher + OCR | Done | Waits for completed writes, drains in-flight work on shutdown, uses correct MIME types, and hands new items to the autonomous coordinator |
 | Browser history reader (Chrome/Safari) | Done | First-run baseline prevents backlog imports; debounced main/WAL/SHM file events trigger snapshots with a two-minute fallback poll |
-| Data model + SQLite storage | Done | Schema v6 migration, consistent pre-migration backup, working states, comparison snapshots/overrides, embeddings, audit actions, checkpoint kinds, and conservative legacy handling |
+| Data model + SQLite storage | Done | Schema v7 migration, consistent pre-migration backup, working states, comparison snapshots/overrides, decision outcomes, reconciliation origin, embeddings, audit actions, checkpoint kinds, and conservative legacy handling |
 
 ### Week 2 — Clustering + Synthesis Agents
 
 | Task | Status | Notes |
 |------|--------|-------|
 | Autonomous routing | Done | Strict `ignore/new_thread/continue_branch/new_branch` output, public-page enrichment, hybrid retrieval, deterministic application, and visible errors |
-| Live working tree + checkpoints | Done | Working state is visible immediately; Sol writes in-progress/resolved commits after 25 seconds quiet or semantic completion, then immediately reconciles branches |
+| Live working tree + checkpoints | Done | Working state is visible immediately; Sol writes commits after 25 seconds quiet, and an actionable recommendation resolves when only minor validation remains, then immediately reconciles branches |
 | Audit, retry, and undo | Done | Every automation action records rationale/context/latency; failed routes retry after about 20 seconds; isolated routing actions support dependency-safe undo |
 
 ### Week 3 — Resurfacing + UI
@@ -37,7 +37,7 @@ This file tracks the latest implementation progress, decisions made, and technic
 | Reopen detection | Done | |
 | Diff generation | Done | |
 | Heartbeat digest job | Done | |
-| Dashboard: Decision workspace | Done | Light-first interactive research canvas with deterministic left-to-right layout, semantic zoom, screenshots, current answer, source-backed comparison, and Resume Research |
+| Dashboard: Decision workspace | Done | Light-first interactive research canvas with deterministic left-to-right layout, semantic zoom, screenshots, current answer, source-backed comparison, Resume Research, automatic/manual reconciliation provenance, and outcome review |
 | Dashboard: All-threads list | Done | Repository layout sorted by real evidence activity |
 | Dashboard: Activity + Live Trace drawers | Done | Audit events and live pipeline/capture health moved into contextual drawers; neither is an approval gate |
 
@@ -47,8 +47,9 @@ This file tracks the latest implementation progress, decisions made, and technic
 |------|--------|-------|
 | Native menu bar app (SwiftUI) | Done | Controls the service-owned Chrome screenshot policy and reports extension status without requesting Screen Recording access |
 | Nudge wiring | Done | |
-| End-to-end demo script | Done | |
+| End-to-end demo script | Done | 2:45 problem-to-solution narrative with exact visuals, voiceover, live-capture timing, outcome review, and a prominent Qoder MCP segment |
 | Bug fixing & polish | Done | |
+| Read-only Qoder MCP server | Done | Official MCP SDK over STDIO; five focused retrieval tools, project `.mcp.json`, protocol-level tests, and read-only SQLite access |
 
 ---
 
@@ -87,6 +88,10 @@ Record key implementation decisions here as they are made.
 | 2026-08-04 | Resume Research reopens bounded context | Each decision derives the next unresolved question and up to three recent branch-relevant pages. The localhost dashboard asks the fixed Chrome extension to reopen validated HTTP/S URLs; the browser fallback opens one page when the extension is unavailable. |
 | 2026-08-04 | Screenshot capacity favors research intent | Manual captures, already-filed decision pages, and explicit comparison/evaluation pages receive priority; obvious feed/Shorts noise is routed without spending screenshot capacity. Existing hourly/daily limits and local retention remain. |
 | 2026-08-04 | Graph geometry is authoritative | Every canvas node has an explicit layout size and receives its own cloned Dagre label because Dagre mutates labels with coordinates; selected nodes reflow at their expanded size, semantic zoom uses hysteresis, and Motion no longer performs competing viewport-relative layout measurement inside React Flow. |
+| 2026-08-04 | Actionable decisions may resolve with minor follow-ups | A concrete default/recommendation closes the loop when all remaining questions are validation or refinement; blocking requirements still keep the checkpoint in progress. |
+| 2026-08-04 | Outcomes are first-class decision history | Resolved commits can record worked, mixed, regretted, or superseded outcomes. Legacy regret remains compatible and maps to the outcome view. |
+| 2026-08-04 | Deduplication is layered and conservative | Normalized URLs are suppressed within a 30-minute session; high-similarity same-anchor questions reuse an existing single-branch thread; distinct later revisits remain eligible evidence. |
+| 2026-08-04 | Trace exposes read-only MCP tools | Qoder receives focused decision retrieval through the official MCP SDK over project-scoped STDIO; the database is opened read-only and no mutation tools are registered. |
 
 ---
 
@@ -102,6 +107,9 @@ Branch
 Commit
  - id, branch_id, verdict_summary, reasoning, source_item_ids[], kind, resolution_status, comparison_json, created_at, regret: bool, regret_note?
 
+DecisionOutcome
+ - id, commit_id, status (worked/mixed/regretted/superseded), note, created_at, updated_at
+
 SourceItem
  - id, type (screenshot | browser_history), raw_text, extracted_entities, url?, captured_at,
    thread_id?, branch_id?, content_text?, content_status, automation_status, attempts, clustering_confidence?, processed
@@ -116,12 +124,21 @@ AutomationAction
  - action, source/thread/branch ids, model, confidence, rationale, context/before/after snapshots, latency, status
 
 MergeEvent
- - id, thread_id, source_branch_ids[], resulting_commit_id, resolved_rule
+ - id, thread_id, source_branch_ids[], resulting_commit_id, resolved_rule, origin (automatic/manual)
 ```
 
 ---
 
 ## Implementation Notes
+
+### 2026-08-04 — Closed Decision Loop, Deduplication, Privacy, and Qoder MCP (Schema v7)
+- Refined checkpoint closure in both the Sol prompt and service policy. A concrete default can resolve while minor testing remains; questions about requirements, context, or the actual choice remain blocking.
+- Added `decision_outcomes` with worked/mixed/regretted/superseded states, an outcome API, compatibility with regret markers, and an outcome-review node connected to the resolved commit on the canonical map.
+- Added deterministic normalized-URL/session deduplication and a high-threshold semantic same-question guard before creating a new thread. Comparison merging now collapses equivalent supported claims and preserves distinct compatible facts without declaring a conflict.
+- Moved capture safety ahead of all screenshot priority logic in the extension and service. Localhost and sensitive URLs cannot be captured even when previously assigned to a decision or manually requested.
+- Added reconciliation provenance. Automatic and manual reconciliation are distinct in SQLite, the map, and the audit UI; the user control is labelled Manual override.
+- Added a read-only STDIO MCP server using `@modelcontextprotocol/sdk`, project-scoped Qoder configuration, and five focused decision retrieval tools. MCP integration tests exercise discovery and calls through the protocol rather than invoking query helpers directly.
+- Live acceptance migrated the populated database to schema v7 with `~/.trace/backups/trace-pre-v7-2026-08-04T15-02-38-546Z.sqlite`, verified outcome/reconciliation fields through the production API, and confirmed Qoder reports the Trace STDIO server connected. Validation passes 216 TypeScript/React tests, ESLint, all production builds, and 19 Swift tests.
 
 ### 2026-08-04 — Canvas-First Research Story (Schema v6)
 - Replaced the fixed SVG graph and external inspector cards with a React Flow/Dagre canvas. The canonical story is left-to-right, context paths separate vertically, and temporary dragging never mutates SQLite.

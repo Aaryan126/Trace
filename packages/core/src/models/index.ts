@@ -148,7 +148,19 @@ export interface MergeEvent {
   source_branch_ids: string[];
   resulting_commit_id: string;
   resolved_rule: string;
+  origin: 'automatic' | 'manual';
   created_at: string;
+}
+
+export type DecisionOutcomeStatus = 'worked' | 'mixed' | 'regretted' | 'superseded';
+
+export interface DecisionOutcome {
+  id: string;
+  commit_id: string;
+  status: DecisionOutcomeStatus;
+  note: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FeedEvent {

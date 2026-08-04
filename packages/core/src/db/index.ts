@@ -7,3 +7,4 @@ export { MergeEventRepository } from './repositories/merge-event-repository.js';
 export { FeedEventRepository } from './repositories/feed-event-repository.js';
 export { WorkingStateRepository, AutomationActionRepository, EmbeddingRepository, ComparisonOverrideRepository } from './repositories/automation-repository.js';
 export { CaptureAssetRepository } from './repositories/capture-asset-repository.js';
+export { DecisionOutcomeRepository } from './repositories/decision-outcome-repository.js';

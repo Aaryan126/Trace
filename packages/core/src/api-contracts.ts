@@ -30,6 +30,15 @@ export interface ApiCommit {
   kind?: 'checkpoint' | 'resolved' | 'merge' | 'revert';
   resolutionStatus?: 'in_progress' | 'resolved';
   comparison: ApiComparisonMatrix;
+  outcome?: ApiDecisionOutcome;
+}
+
+export type ApiDecisionOutcomeStatus = 'worked' | 'mixed' | 'regretted' | 'superseded';
+
+export interface ApiDecisionOutcome {
+  status: ApiDecisionOutcomeStatus;
+  note: string;
+  updatedAt: string;
 }
 
 export type ApiComparisonCellStatus = 'supported' | 'unknown' | 'conflicting' | 'assumption';
@@ -88,6 +97,13 @@ export interface ApiThreadDetail extends ApiThread {
     summary: string;
     pages: Array<{ id: string; title: string; url: string; capturedAt: string; thumbnailUrl?: string }>;
   };
+  outcomeReview?: {
+    commitId: string;
+    branchId: string;
+    decision: string;
+    decidedAt: string;
+    outcome?: ApiDecisionOutcome;
+  };
 }
 
 export interface ApiResearchStoryNode {
@@ -101,6 +117,7 @@ export interface ApiResearchStoryNode {
   status: 'working' | 'in_progress' | 'resolved';
   sourceItems: ApiSourceItem[];
   commitId?: string;
+  origin?: 'automatic' | 'manual';
 }
 
 export interface ApiWorkingState {

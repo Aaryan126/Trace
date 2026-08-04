@@ -70,9 +70,13 @@ export class CommitRepository {
   }
 
   addRegret(id: string, note: string): Commit | undefined {
+    return this.setRegret(id, true, note);
+  }
+
+  setRegret(id: string, regret: boolean, note = ''): Commit | undefined {
     this.db
       .prepare('UPDATE commits SET regret = ?, regret_note = ? WHERE id = ?')
-      .run(1, note, id);
+      .run(regret ? 1 : 0, regret ? note : null, id);
     return this.getById(id);
   }
 }

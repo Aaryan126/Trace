@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "trace": {
+      "command": "node",
+      "args": ["packages/service/dist/mcp.js"]
+    }
+  }
+}

@@ -154,6 +154,22 @@ describe('ThreadGraph', () => {
     expect(workingNode.style.width).toBe('330px');
     expect(workingNode.style.height).toBe('270px');
   });
+
+  it('adds an outcome review node after a resolved decision', async () => {
+    const now = new Date().toISOString();
+    const setOutcome = vi.fn().mockResolvedValue(undefined);
+    render(<ThreadGraph
+      tree={{ nodes: [{ id: 'commit1', type: 'commit', branchId: null, regret: false, createdAt: now }], edges: [] }}
+      commits={[{ id: 'commit1', parentId: null, branchId: 'branch1', verdictSummary: 'Use SQLite', reasoning: 'Local first', createdAt: now, regret: false, sourceItems: [], resolutionStatus: 'resolved' }]}
+      outcomeReview={{ commitId: 'commit1', branchId: 'branch1', decision: 'Use SQLite', decidedAt: now }}
+      onSetOutcome={setOutcome}
+    />);
+
+    expect(screen.getByText('Outcome review')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Outcome note'), { target: { value: 'It stayed reliable.' } });
+    fireEvent.click(screen.getByText('Worked'));
+    await waitFor(() => expect(setOutcome).toHaveBeenCalledWith('worked', 'It stayed reliable.'));
+  });
 });
 
 describe('Unified layout', () => {

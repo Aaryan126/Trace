@@ -78,6 +78,6 @@ function SystemSurface() {
     <section><h3>Pipeline</h3><div className="pipeline-row"><span>Capture</span><span>Understand</span><span>File</span><span>Checkpoint</span></div></section>
     <section><h3>Working research · {live.states.length}</h3>{live.states.slice(0, 8).map((state) => <div className="system-item" key={state.id}><strong>{state.threadTitle}</strong><p>{state.researchQuestion}</p><small>{state.status} · {state.evidenceIds.length} sources</small></div>)}</section>
     {failed.length > 0 && <section><h3>Needs retry · {failed.length}</h3>{failed.map((source) => <div className="system-item is-error" key={source.id}><strong>{source.rawText || 'Routing failed'}</strong><p>{source.errorMessage}</p></div>)}</section>}
-    <section><h3>Recent automation</h3>{live.actions.slice(0, 12).map((action) => <div className="system-item" key={action.id}><strong>{action.action.replaceAll('_', ' ')}</strong><p>{action.rationale}</p></div>)}</section>
+    <section><h3>Recent automation</h3>{live.actions.slice(0, 12).map((action) => <div className="system-item" key={action.id}><strong>{action.action === 'merge' ? 'automatic reconciliation' : action.action.replaceAll('_', ' ')}</strong><p>{action.rationale}</p></div>)}</section>
   </div>;
 }

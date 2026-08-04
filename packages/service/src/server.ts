@@ -18,6 +18,7 @@ import {
   AutomationActionRepository,
   CaptureAssetRepository,
   ComparisonOverrideRepository,
+  DecisionOutcomeRepository,
 } from '@trace/core';
 import type {
   ApiCaptureItem,
@@ -39,6 +40,8 @@ import type {
   ComparisonMatrix,
   ComparisonOverride,
   BranchWorkingState,
+  DecisionOutcomeStatus,
+  DecisionOutcome,
 } from '@trace/core';
 import type { AutonomousCoordinator, TraceLiveEvent } from './automation.js';
 import type { BrowserCaptureCoordinator, BrowserCaptureFailureReason, BrowserCapturePayload, BrowserExtensionVisit } from './browser-capture.js';
@@ -91,6 +94,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   const automationActionRepo = new AutomationActionRepository(db);
   const captureAssetRepo = new CaptureAssetRepository(db);
   const comparisonOverrideRepo = new ComparisonOverrideRepository(db);
+  const decisionOutcomeRepo = new DecisionOutcomeRepository(db);
   const toApiThread = (thread: Thread): ApiThread => {
     const items = sourceItemRepo.listByThread(thread.id);
     const lastActivity = items.length > 0
@@ -463,6 +467,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
           kind: commit.kind,
           resolutionStatus: commit.resolution_status,
           comparison: toApiComparison(commit.comparison, comparisonOverrideRepo.listByBranch(branch.id)),
+          outcome: toApiOutcome(decisionOutcomeRepo.getByCommit(commit.id)),
           sourceItems: commit.source_item_ids
             .map((itemId) => itemMap.get(itemId))
             .filter((item): item is SourceItem => Boolean(item))
@@ -493,6 +498,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       currentAnswer: buildCurrentAnswer(latest, workingStateRepo.listRecent(100).filter((state) => branches.some((branch) => branch.id === state.branch_id))),
       comparison: buildCurrentComparison(latest, workingStateRepo.listRecent(100).filter((state) => branches.some((branch) => branch.id === state.branch_id)), comparisonOverrideRepo),
       resume: buildResume(branches, workingStateRepo.listRecent(100).filter((state) => branches.some((branch) => branch.id === state.branch_id)), items, captureAssetRepo),
+      outcomeReview: buildOutcomeReview(branches.flatMap((branch) => commitRepo.listByBranch(branch.id)), decisionOutcomeRepo),
     };
     return response;
   });
@@ -755,7 +761,38 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
 
     commitRepo.addRegret(id, note);
+    decisionOutcomeRepo.upsert(id, 'regretted', note);
     return { success: true };
+  });
+
+  app.put('/api/commits/:id/outcome', {
+    schema: {
+      body: {
+        type: 'object', required: ['status'], additionalProperties: false,
+        properties: {
+          status: { type: 'string', enum: ['worked', 'mixed', 'regretted', 'superseded'] },
+          note: { type: 'string', maxLength: 1000 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const commit = commitRepo.getById(id);
+    if (!commit || commit.resolution_status !== 'resolved') {
+      return reply.status(404).send({ error: 'Resolved decision not found' });
+    }
+    const { status, note = '' } = request.body as { status: DecisionOutcomeStatus; note?: string };
+    const outcome = decisionOutcomeRepo.upsert(id, status, note);
+    commitRepo.setRegret(id, status === 'regretted', note);
+    const branch = branchRepo.getById(commit.branch_id);
+    automationActionRepo.create({
+      action: 'outcome_recorded', source_item_id: null, thread_id: branch?.thread_id ?? null,
+      branch_id: commit.branch_id, model: null, confidence: null,
+      rationale: `Decision outcome recorded as ${status}.`, context_snapshot: { commitId: id },
+      before_snapshot: {}, after_snapshot: { status, note: note.trim() }, latency_ms: null,
+      status: 'applied', undoable: false,
+    });
+    return { success: true, outcome: toApiOutcome(outcome) };
   });
 
   // ---------------------------------------------------------------------------
@@ -812,6 +849,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       source_branch_ids: uniqueBranchIds,
       resulting_commit_id: commit.id,
       resolved_rule: resolvedRule,
+      origin: 'manual',
     });
 
     threadRepo.updateStatus(id, 'closed');
@@ -979,6 +1017,28 @@ function buildCurrentAnswer(latest: Commit | undefined, states: BranchWorkingSta
   return { text: latest.verdict_summary, reasoning: latest.reasoning, status: 'committed', branchId: latest.branch_id, updatedAt: latest.created_at, sourceCount: latest.source_item_ids.length };
 }
 
+function toApiOutcome(outcome: DecisionOutcome | undefined): NonNullable<ApiThreadDetail['outcomeReview']>['outcome'] {
+  if (!outcome) return undefined;
+  return { status: outcome.status, note: outcome.note, updatedAt: outcome.updated_at };
+}
+
+function buildOutcomeReview(commits: Commit[], outcomes: DecisionOutcomeRepository): ApiThreadDetail['outcomeReview'] {
+  const decision = commits
+    .filter((commit) => commit.resolution_status === 'resolved')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .at(-1);
+  if (!decision) return undefined;
+  return {
+    commitId: decision.id,
+    branchId: decision.branch_id,
+    decision: decision.verdict_summary,
+    decidedAt: decision.created_at,
+    outcome: toApiOutcome(outcomes.getByCommit(decision.id)) ?? (decision.regret
+      ? { status: 'regretted', note: decision.regret_note ?? '', updatedAt: decision.created_at }
+      : undefined),
+  };
+}
+
 function buildResume(
   branches: Branch[],
   states: BranchWorkingState[],
@@ -1040,10 +1100,11 @@ function buildResearchStory(
     status: commit.resolutionStatus ?? 'in_progress',
     sourceItems: commit.sourceItems,
     commitId: commit.id,
+    origin: commit.kind === 'merge' ? mergeEvents.find((event) => event.resulting_commit_id === commit.id)?.origin : undefined,
   } satisfies ApiResearchStoryNode)));
   for (const event of mergeEvents) {
     if (nodes.some((node) => node.id === event.id)) continue;
-    nodes.push({ id: event.id, kind: 'merge', branchId: event.source_branch_ids[0] ?? '', contextLabel: 'Reconciled contexts', title: 'Branches reconciled', summary: event.resolved_rule, createdAt: event.created_at, status: 'resolved', sourceItems: [] });
+    nodes.push({ id: event.id, kind: 'merge', branchId: event.source_branch_ids[0] ?? '', contextLabel: 'Reconciled contexts', title: event.origin === 'automatic' ? 'Automatically reconciled' : 'Manual override reconciliation', summary: event.resolved_rule, createdAt: event.created_at, status: 'resolved', sourceItems: [], origin: event.origin });
   }
   const edges = [...tree.edges];
   for (const state of states) {

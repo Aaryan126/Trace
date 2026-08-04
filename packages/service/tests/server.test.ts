@@ -819,6 +819,24 @@ describe('POST /api/commits/:id/regret', () => {
   });
 });
 
+describe('PUT /api/commits/:id/outcome', () => {
+  it('records an outcome only for a resolved decision and exposes it in the decision detail', async () => {
+    const resolved = commitRepo.create({ branch_id: branchAId, verdict_summary: 'Use SQLite', reasoning: 'Fits the constraints.', source_item_ids: [], resolution_status: 'resolved' });
+    const response = await app.inject({ method: 'PUT', url: `/api/commits/${resolved.id}/outcome`, payload: { status: 'worked', note: 'The app stayed reliable.' } });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).outcome).toMatchObject({ status: 'worked', note: 'The app stayed reliable.' });
+    const detail = JSON.parse((await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}` })).body);
+    expect(detail.outcomeReview).toMatchObject({ commitId: resolved.id, decision: 'Use SQLite', outcome: { status: 'worked' } });
+    expect(commitRepo.getById(resolved.id)?.regret).toBe(false);
+  });
+
+  it('rejects an unresolved checkpoint', async () => {
+    const response = await app.inject({ method: 'PUT', url: `/api/commits/${commitA2Id}/outcome`, payload: { status: 'mixed' } });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
 describe('POST /api/threads/:id/merge', () => {
   it('creates a merge event and resulting commit', async () => {
     // Create a second branch on the open thread
@@ -851,7 +869,11 @@ describe('POST /api/threads/:id/merge', () => {
     const mergeEvents = mergeEventRepo.listByThread(threadOpenId);
     expect(mergeEvents).toHaveLength(1);
     expect(mergeEvents[0].resolved_rule).toBe('Take the most recent');
+    expect(mergeEvents[0].origin).toBe('manual');
     expect(threadRepo.getById(threadOpenId)?.status).toBe('closed');
+
+    const detail = JSON.parse((await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}` })).body);
+    expect(detail.story.nodes).toContainEqual(expect.objectContaining({ id: body.mergeEventId, title: 'Manual override reconciliation', origin: 'manual' }));
 
     const treeResponse = await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}/tree` });
     const tree = JSON.parse(treeResponse.body);

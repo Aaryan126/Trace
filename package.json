@@ -11,6 +11,7 @@
     "build:menubar": "cd menubar/Trace && swift build",
     "test": "vitest run",
     "agent": "pnpm --filter @trace/service cli",
+    "mcp": "node packages/service/dist/mcp.js",
     "migrate:legacy": "tsx scripts/migrate-legacy.ts",
     "lint": "eslint packages/",
     "format": "prettier --write 'packages/**/*.{ts,tsx}'"

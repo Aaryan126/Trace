@@ -79,9 +79,20 @@ CREATE TABLE IF NOT EXISTS merge_events (
   source_branch_ids TEXT NOT NULL DEFAULT '[]',
   resulting_commit_id TEXT NOT NULL,
   resolved_rule TEXT NOT NULL,
+  origin TEXT NOT NULL DEFAULT 'automatic' CHECK (origin IN ('automatic', 'manual')),
   created_at TEXT NOT NULL,
   FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
   FOREIGN KEY (resulting_commit_id) REFERENCES commits(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS decision_outcomes (
+  id TEXT PRIMARY KEY,
+  commit_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('worked', 'mixed', 'regretted', 'superseded')),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS feed_events (
@@ -171,3 +182,4 @@ CREATE INDEX IF NOT EXISTS idx_working_states_due ON branch_working_states(check
 CREATE INDEX IF NOT EXISTS idx_automation_actions_created ON automation_actions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_capture_assets_expiry ON capture_assets(full_expires_at);
 CREATE INDEX IF NOT EXISTS idx_comparison_overrides_branch ON comparison_overrides(branch_id);
+CREATE INDEX IF NOT EXISTS idx_decision_outcomes_commit ON decision_outcomes(commit_id);

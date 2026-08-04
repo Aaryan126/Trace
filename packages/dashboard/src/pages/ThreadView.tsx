@@ -14,6 +14,7 @@ import {
   mergeThread,
   openResumePages,
   resetComparison,
+  setDecisionOutcome,
   subscribeToTrace,
   type ThreadDetail,
   type TreeData,
@@ -73,6 +74,12 @@ export function ThreadView() {
     await resetComparison(branchId, optionId, criterionId); await reload();
   }, [reload, thread]);
 
+  const handleOutcome = useCallback(async (status: 'worked' | 'mixed' | 'regretted' | 'superseded', note: string) => {
+    if (!thread?.outcomeReview) return;
+    await setDecisionOutcome(thread.outcomeReview.commitId, status, note);
+    await reload();
+  }, [reload, thread]);
+
   if (loading) return <div className="decision-loading"><div /><div /><div /></div>;
   if (error || !thread || !tree) return <div className="decision-error"><Link to="/decisions">← Back to decisions</Link><p>{error ?? 'Decision not found'}</p></div>;
 
@@ -84,7 +91,7 @@ export function ThreadView() {
           <div className="decision-actions">
             <Link to="/decisions" className="button-secondary"><Icon name="branch" className="h-4 w-4" /> All decisions</Link>
             <button type="button" className="button-secondary" onClick={() => void exportThread(thread.id, 'markdown')}><Icon name="activity" className="h-4 w-4" /> Export</button>
-            <button type="button" className="button-secondary" onClick={() => setMergeOpen(true)} disabled={thread.branches.length < 2}><Icon name="merge" className="h-4 w-4" /> Reconcile</button>
+            <button type="button" className="button-secondary" onClick={() => setMergeOpen(true)} disabled={thread.branches.length < 2}><Icon name="merge" className="h-4 w-4" /> Manual override</button>
           </div>
         </div>
         <div className="decision-title-row">
@@ -106,16 +113,18 @@ export function ThreadView() {
         currentAnswer={thread.currentAnswer}
         comparison={thread.comparison}
         resume={thread.resume}
+        outcomeReview={thread.outcomeReview}
         threadTitle={thread.title}
         onResume={handleResume}
+        onSetOutcome={handleOutcome}
         onCorrectComparison={handleCorrection}
         onResetComparison={handleReset}
       />
 
       {notice && <div className="trace-toast" role="status">{notice}</div>}
 
-      <Modal open={mergeOpen} onClose={() => setMergeOpen(false)} title="Reconcile decision contexts">
-        <p className="modal-copy">Write the durable rule that explains when each context applies. Trace will preserve the original paths.</p>
+      <Modal open={mergeOpen} onClose={() => setMergeOpen(false)} title="Manual reconciliation override">
+        <p className="modal-copy">Trace reconciles compatible branches automatically. Use this override only when you want to supply the durable rule yourself; the original paths remain preserved.</p>
         <textarea value={mergeRule} onChange={(event) => setMergeRule(event.target.value)} rows={4} className="modal-textarea" placeholder="Use Plus by default; use SeedVR2 when batch video output matters more than free unlimited use." />
         <div className="modal-actions"><button onClick={() => setMergeOpen(false)} className="button-secondary">Cancel</button><button onClick={() => void handleMerge()} disabled={!mergeRule.trim()} className="button-primary"><Icon name="merge" className="h-4 w-4" /> Create merge</button></div>
       </Modal>

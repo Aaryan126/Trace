@@ -10,6 +10,7 @@ import { CommitRepository } from '../src/db/repositories/commit-repository.js';
 import { SourceItemRepository } from '../src/db/repositories/source-item-repository.js';
 import { MergeEventRepository } from '../src/db/repositories/merge-event-repository.js';
 import { FeedEventRepository } from '../src/db/repositories/feed-event-repository.js';
+import { DecisionOutcomeRepository } from '../src/db/repositories/decision-outcome-repository.js';
 
 let db: DatabaseType;
 let threads: ThreadRepository;
@@ -36,7 +37,7 @@ describe('Schema creation', () => {
       .all() as { name: string }[];
     const names = tables.map((t) => t.name).sort();
     expect(names).toEqual(
-      ['automation_actions', 'branch_working_states', 'branches', 'capture_assets', 'commits', 'comparison_overrides', 'feed_events', 'merge_events', 'metadata', 'semantic_embeddings', 'source_items', 'threads']
+      ['automation_actions', 'branch_working_states', 'branches', 'capture_assets', 'commits', 'comparison_overrides', 'decision_outcomes', 'feed_events', 'merge_events', 'metadata', 'semantic_embeddings', 'source_items', 'threads']
     );
   });
 
@@ -67,11 +68,26 @@ describe('Schema creation', () => {
     expect(row).toEqual({ branch_id: 'branch-1', clustering_confidence: null, automation_status: 'legacy_unresolved' });
     const capture = migrated.prepare('SELECT capture_status, capture_reason FROM source_items WHERE id = ?').get('item-1');
     expect(capture).toEqual({ capture_status: 'not_requested', capture_reason: null });
-    expect(migrated.prepare("SELECT value FROM metadata WHERE key = 'schema_version'").pluck().get()).toBe('6');
+    expect(migrated.prepare("SELECT value FROM metadata WHERE key = 'schema_version'").pluck().get()).toBe('7');
     expect(migrated.pragma('table_info(commits)').some((column: { name: string }) => column.name === 'comparison_json')).toBe(true);
     expect(migrated.pragma('table_info(branch_working_states)').some((column: { name: string }) => column.name === 'comparison_json')).toBe(true);
     migrated.close();
     rmSync(directory, { recursive: true, force: true });
+  });
+});
+
+describe('DecisionOutcomeRepository', () => {
+  it('records and updates the result of a resolved decision', () => {
+    const thread = threads.create({ title: 'Choose database', tags: [], status: 'closed' });
+    const branch = branches.create({ thread_id: thread.id, parent_commit_id: null, context_label: 'Local app' });
+    const commit = commits.create({ branch_id: branch.id, verdict_summary: 'Use SQLite', reasoning: 'Local first.', source_item_ids: [], resolution_status: 'resolved' });
+    const outcomes = new DecisionOutcomeRepository(db);
+
+    outcomes.upsert(commit.id, 'worked', 'Fast and reliable.');
+    outcomes.upsert(commit.id, 'mixed', 'Sync later became difficult.');
+
+    expect(outcomes.getByCommit(commit.id)).toMatchObject({ status: 'mixed', note: 'Sync later became difficult.' });
+    expect(outcomes.listByThread(thread.id)).toHaveLength(1);
   });
 });
 

@@ -12,6 +12,8 @@ describe('Trace Chrome extension capture policy', () => {
 
   it('rejects internal, sign-in, payment, mail, and health pages', () => {
     expect(isCapturableUrl('chrome://settings')).toBe(false);
+    expect(isCapturableUrl('http://localhost:3333/threads/example')).toBe(false);
+    expect(isCapturableUrl('http://127.0.0.1:3333/activity')).toBe(false);
     expect(isCapturableUrl('https://accounts.google.com/signin')).toBe(false);
     expect(isCapturableUrl('https://shop.example.com/checkout')).toBe(false);
     expect(isCapturableUrl('https://mail.proton.me/u/0/inbox')).toBe(false);

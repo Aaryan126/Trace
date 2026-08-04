@@ -56,6 +56,10 @@ function migrate(db: Database.Database): void {
   const workingNames = new Set(workingColumns.map((column) => column.name));
   if (!workingNames.has('comparison_json')) db.exec(`ALTER TABLE branch_working_states ADD COLUMN comparison_json TEXT NOT NULL DEFAULT '{"options":[],"criteria":[],"cells":[]}'`);
 
+  const mergeColumns = db.pragma('table_info(merge_events)') as Array<{ name: string }>;
+  const mergeNames = new Set(mergeColumns.map((column) => column.name));
+  if (!mergeNames.has('origin')) db.exec("ALTER TABLE merge_events ADD COLUMN origin TEXT NOT NULL DEFAULT 'automatic'");
+
   db.exec(`
     UPDATE source_items
     SET branch_id = (
@@ -89,6 +93,17 @@ function migrate(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_comparison_overrides_branch ON comparison_overrides(branch_id);
 
+    CREATE TABLE IF NOT EXISTS decision_outcomes (
+      id TEXT PRIMARY KEY,
+      commit_id TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL CHECK (status IN ('worked', 'mixed', 'regretted', 'superseded')),
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_decision_outcomes_commit ON decision_outcomes(commit_id);
+
     UPDATE source_items
     SET automation_status = CASE
       WHEN processed = 0 THEN 'legacy_unresolved'
@@ -97,7 +112,7 @@ function migrate(db: Database.Database): void {
     END
     WHERE automation_status IS NULL OR automation_status = '' OR (automation_status = 'legacy_unresolved' AND processed = 1);
 
-    INSERT INTO metadata (key, value) VALUES ('schema_version', '6')
+    INSERT INTO metadata (key, value) VALUES ('schema_version', '7')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value;
   `);
 }
@@ -110,11 +125,11 @@ function backupBeforeCurrentSchema(db: Database.Database, dbPath: string, existe
   const version = hasMetadata
     ? db.prepare("SELECT value FROM metadata WHERE key = 'schema_version'").pluck().get() as string | undefined
     : undefined;
-  if (Number(version ?? 0) >= 6) return;
+  if (Number(version ?? 0) >= 7) return;
   const backupDir = join(dirname(dbPath), 'backups');
   mkdirSync(backupDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = join(backupDir, `trace-pre-v6-${stamp}.sqlite`);
+  const backupPath = join(backupDir, `trace-pre-v7-${stamp}.sqlite`);
   db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
 }
 

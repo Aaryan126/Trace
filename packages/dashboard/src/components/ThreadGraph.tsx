@@ -17,12 +17,12 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'motion/react';
-import type { ApiComparisonMatrix, ApiResearchStoryNode } from '@trace/core';
+import type { ApiComparisonMatrix, ApiDecisionOutcomeStatus, ApiResearchStoryNode } from '@trace/core';
 import type { CommitNode as CommitNodeType, ThreadDetail, TreeData, WorkingState } from '../lib/api';
 import { Icon } from './Icon';
 
 type Density = 'overview' | 'reading';
-type CanvasKind = ApiResearchStoryNode['kind'] | 'origin' | 'answer' | 'comparison' | 'resume';
+type CanvasKind = ApiResearchStoryNode['kind'] | 'origin' | 'answer' | 'comparison' | 'resume' | 'outcome';
 
 interface CanvasNodeData extends Record<string, unknown> {
   kind: CanvasKind;
@@ -36,7 +36,9 @@ interface CanvasNodeData extends Record<string, unknown> {
   density: Density;
   comparison?: ApiComparisonMatrix;
   resume?: ThreadDetail['resume'];
+  outcomeReview?: ThreadDetail['outcomeReview'];
   onResume?: () => void;
+  onSetOutcome?: (status: ApiDecisionOutcomeStatus, note: string) => Promise<void>;
   onCorrect?: (optionId: string, criterionId: string, value: string, status: ComparisonStatus) => Promise<void>;
   onReset?: (optionId: string, criterionId: string) => Promise<void>;
 }
@@ -55,8 +57,10 @@ interface ThreadGraphProps {
   currentAnswer?: ThreadDetail['currentAnswer'];
   comparison?: ApiComparisonMatrix;
   resume?: ThreadDetail['resume'];
+  outcomeReview?: ThreadDetail['outcomeReview'];
   threadTitle?: string;
   onResume?: () => void;
+  onSetOutcome?: CanvasNodeData['onSetOutcome'];
   onCorrectComparison?: CanvasNodeData['onCorrect'];
   onResetComparison?: CanvasNodeData['onReset'];
 }
@@ -65,6 +69,7 @@ const NODE_SIZE: Record<CanvasKind, { width: number; height: number }> = {
   origin: { width: 250, height: 140 }, session: { width: 300, height: 220 }, checkpoint: { width: 300, height: 220 },
   decision: { width: 320, height: 230 }, merge: { width: 300, height: 210 }, working: { width: 330, height: 270 },
   answer: { width: 370, height: 260 }, comparison: { width: 440, height: 350 }, resume: { width: 380, height: 390 },
+  outcome: { width: 380, height: 330 },
 };
 const FOCUSED_NODE_SIZE = { width: 480, height: 430 };
 
@@ -80,7 +85,7 @@ function ResearchCanvas(props: ThreadGraphProps) {
   const [density, setDensity] = useState<Density>('reading');
   const [selected, setSelected] = useState<string | null>(props.selectedId ?? null);
   const reducedMotion = useReducedMotion();
-  const graph = useMemo(() => buildCanvasGraph(props, selected), [props.tree, props.commits, props.workingStates, props.story, props.currentAnswer, props.comparison, props.resume, props.threadTitle, props.onResume, props.onCorrectComparison, props.onResetComparison, selected]);
+  const graph = useMemo(() => buildCanvasGraph(props, selected), [props.tree, props.commits, props.workingStates, props.story, props.currentAnswer, props.comparison, props.resume, props.outcomeReview, props.threadTitle, props.onResume, props.onSetOutcome, props.onCorrectComparison, props.onResetComparison, selected]);
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(graph.nodes);
   const { fitView } = useReactFlow<CanvasNode, Edge>();
 
@@ -89,7 +94,7 @@ function ResearchCanvas(props: ThreadGraphProps) {
 
   const selectNode = useCallback((_event: React.MouseEvent, node: CanvasNode) => {
     setSelected((current) => current === node.id ? null : node.id);
-    if (node.data.kind !== 'working' && node.data.kind !== 'origin' && node.data.kind !== 'answer' && node.data.kind !== 'comparison' && node.data.kind !== 'resume') props.onSelectNode?.(node.id);
+    if (node.data.kind !== 'working' && node.data.kind !== 'origin' && node.data.kind !== 'answer' && node.data.kind !== 'comparison' && node.data.kind !== 'resume' && node.data.kind !== 'outcome') props.onSelectNode?.(node.id);
   }, [props.onSelectNode]);
 
   const updateDensity = useCallback((_event: MouseEvent | TouchEvent | null, viewport: { zoom: number }) => {
@@ -150,7 +155,7 @@ function ResearchCanvas(props: ThreadGraphProps) {
 function ResearchNode({ data, selected }: NodeProps<CanvasNode>) {
   const [tab, setTab] = useState<'story' | 'evidence' | 'comparison'>('story');
   const captures = data.sources.filter((source) => source.capture);
-  const isSpecial = ['answer', 'comparison', 'resume'].includes(data.kind);
+  const isSpecial = ['answer', 'comparison', 'resume', 'outcome'].includes(data.kind);
   const showReading = data.density === 'reading' || selected || isSpecial;
 
   return (
@@ -180,9 +185,10 @@ function ResearchNode({ data, selected }: NodeProps<CanvasNode>) {
 
         {data.kind === 'comparison' && data.comparison && <ComparisonGrid matrix={data.comparison} onCorrect={data.onCorrect} onReset={data.onReset} />}
         {data.kind === 'resume' && data.resume && <ResumeContent resume={data.resume} onResume={data.onResume} />}
+        {data.kind === 'outcome' && data.outcomeReview && <OutcomeContent review={data.outcomeReview} onSetOutcome={data.onSetOutcome} />}
 
         <AnimatePresence initial={false}>
-          {selected && !['comparison', 'resume', 'origin'].includes(data.kind) && (
+          {selected && !['comparison', 'resume', 'origin', 'outcome'].includes(data.kind) && (
             <motion.div className="research-focus" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
               <div className="research-focus-tabs" role="tablist" aria-label="Node details">
                 {(['story', 'evidence', ...(data.comparison ? ['comparison'] : [])] as Array<'story' | 'evidence' | 'comparison'>).map((value) => (
@@ -249,13 +255,39 @@ function ResumeContent({ resume, onResume }: { resume: ThreadDetail['resume']; o
   </div>;
 }
 
+function OutcomeContent({ review, onSetOutcome }: { review: NonNullable<ThreadDetail['outcomeReview']>; onSetOutcome?: CanvasNodeData['onSetOutcome'] }) {
+  const [note, setNote] = useState(review.outcome?.note ?? '');
+  const [saving, setSaving] = useState<ApiDecisionOutcomeStatus | null>(null);
+  useEffect(() => setNote(review.outcome?.note ?? ''), [review.outcome?.note]);
+  const options: Array<{ status: ApiDecisionOutcomeStatus; label: string }> = [
+    { status: 'worked', label: 'Worked' },
+    { status: 'mixed', label: 'Mixed' },
+    { status: 'regretted', label: 'Regretted' },
+    { status: 'superseded', label: 'Superseded' },
+  ];
+  return <div className="outcome-content" onClick={(event) => event.stopPropagation()}>
+    <p>Did this decision hold up in practice?</p>
+    <textarea aria-label="Outcome note" value={note} onChange={(event) => setNote(event.target.value)} rows={3} placeholder="What happened after the decision?" />
+    <div className="outcome-options">
+      {options.map(({ status, label }) => <button
+        key={status}
+        type="button"
+        className={review.outcome?.status === status ? 'is-active' : ''}
+        disabled={Boolean(saving)}
+        onClick={() => { setSaving(status); void onSetOutcome?.(status, note.trim()).finally(() => setSaving(null)); }}
+      >{saving === status ? 'Saving…' : label}</button>)}
+    </div>
+    {review.outcome && <small>Last reviewed {relativeTime(review.outcome.updatedAt)}</small>}
+  </div>;
+}
+
 function EvidenceList({ sources }: { sources: CommitNodeType['sourceItems'] }) {
   if (!sources.length) return <p>No source items were attached to this checkpoint.</p>;
   return <div className="focus-evidence">{sources.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>{source.capture && <img src={source.capture.thumbnailUrl} alt="" />}<span>{source.rawText || source.url || 'Captured evidence'}</span></a>)}</div>;
 }
 
 function NodeGlyph({ kind }: { kind: CanvasKind }) {
-  const glyph = kind === 'origin' ? '◆' : kind === 'merge' ? '◇' : kind === 'working' ? '◌' : kind === 'answer' ? '●' : kind === 'comparison' ? '▦' : kind === 'resume' ? '→' : '○';
+  const glyph = kind === 'origin' ? '◆' : kind === 'merge' ? '◇' : kind === 'working' ? '◌' : kind === 'answer' ? '●' : kind === 'comparison' ? '▦' : kind === 'resume' ? '→' : kind === 'outcome' ? '✓' : '○';
   return <span aria-hidden="true">{glyph}</span>;
 }
 
@@ -270,7 +302,7 @@ function buildCanvasGraph(props: ThreadGraphProps, selectedId: string | null): {
     for (const state of props.workingStates ?? []) storyNodes.push({ id: `working:${state.id}`, kind: 'working', branchId: state.branchId, contextLabel: 'Current context', title: state.researchQuestion, summary: state.summary, createdAt: state.lastEventAt, status: 'working', sourceItems: state.evidence });
   }
   const rawNodes: CanvasNode[] = [{ id: 'origin', type: 'research', position: { x: 0, y: 0 }, draggable: false, data: { kind: 'origin', eyebrow: 'Decision', title: props.threadTitle ?? 'Research decision', summary: 'The point where this research story began.', sources: [], density } }];
-  for (const item of storyNodes) rawNodes.push({ id: item.id, type: 'research', position: { x: 0, y: 0 }, data: { kind: item.kind, eyebrow: labelFor(item.kind), title: item.title, summary: item.summary, createdAt: item.createdAt, status: item.status, contextLabel: item.contextLabel, sources: item.sourceItems, density } });
+  for (const item of storyNodes) rawNodes.push({ id: item.id, type: 'research', position: { x: 0, y: 0 }, data: { kind: item.kind, eyebrow: item.kind === 'merge' ? item.commitId ? 'Merged answer' : item.origin === 'manual' ? 'Manual override reconciliation' : 'Automatically reconciled' : labelFor(item.kind), title: item.title, summary: item.summary, createdAt: item.createdAt, status: item.status, contextLabel: item.contextLabel, sources: item.sourceItems, density } });
   const rawEdges: Edge[] = (props.story?.edges ?? props.tree.edges).map((edge) => ({ id: `${edge.from}:${edge.to}`, source: edge.from, target: edge.to, type: 'smoothstep', animated: edge.type === 'branch', className: `story-edge story-edge-${edge.type}`, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } }));
   const incoming = new Set(rawEdges.map((edge) => edge.target));
   const firstNodes = storyNodes.filter((node) => !incoming.has(node.id));
@@ -288,6 +320,12 @@ function buildCanvasGraph(props: ThreadGraphProps, selectedId: string | null): {
   if (props.resume) {
     rawNodes.push({ id: 'resume', type: 'research', position: { x: 0, y: 0 }, draggable: false, data: { kind: 'resume', eyebrow: 'You left off here', title: props.resume.nextQuestion ?? 'Continue from your latest evidence', summary: props.resume.summary, sources: [], density, resume: props.resume, onResume: props.onResume } });
     rawEdges.push({ id: 'current-answer:resume', source: props.currentAnswer ? 'current-answer' : latest?.id ?? 'origin', target: 'resume', type: 'smoothstep', animated: true, className: 'story-edge story-edge-resume', markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } });
+  }
+  if (props.outcomeReview) {
+    const outcome = props.outcomeReview.outcome;
+    rawNodes.push({ id: 'outcome', type: 'research', position: { x: 0, y: 0 }, draggable: false, data: { kind: 'outcome', eyebrow: 'Outcome review', title: outcome ? `Outcome: ${outcome.status}` : 'Did this decision hold up?', summary: outcome?.note || `Review the result of “${props.outcomeReview.decision}” after using it.`, createdAt: outcome?.updatedAt ?? props.outcomeReview.decidedAt, status: outcome?.status, sources: [], density, outcomeReview: props.outcomeReview, onSetOutcome: props.onSetOutcome } });
+    const source = rawNodes.some((node) => node.id === props.outcomeReview!.commitId) ? props.outcomeReview.commitId : props.currentAnswer ? 'current-answer' : latest?.id ?? 'origin';
+    rawEdges.push({ id: `${source}:outcome`, source, target: 'outcome', type: 'smoothstep', className: 'story-edge story-edge-outcome', markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } });
   }
   return layoutGraph(rawNodes, rawEdges, selectedId);
 }
@@ -308,7 +346,7 @@ function layoutGraph(nodes: CanvasNode[], edges: Edge[], selectedId: string | nu
 }
 
 function nodeSize(node: CanvasNode, selectedId: string | null): { width: number; height: number } {
-  if (node.id === selectedId && !['origin', 'comparison', 'resume'].includes(node.data.kind)) return FOCUSED_NODE_SIZE;
+  if (node.id === selectedId && !['origin', 'comparison', 'resume', 'outcome'].includes(node.data.kind)) return FOCUSED_NODE_SIZE;
   return NODE_SIZE[node.data.kind];
 }
 
@@ -321,6 +359,7 @@ function minimapColor(kind: CanvasKind): string {
   if (kind === 'resume') return '#7c3aed';
   if (kind === 'working') return '#2563eb';
   if (kind === 'comparison') return '#0f766e';
+  if (kind === 'outcome') return '#b45309';
   return '#94a3b8';
 }
 

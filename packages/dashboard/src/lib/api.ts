@@ -15,6 +15,7 @@ import type {
   ApiTreeNode,
   ApiSearchResult,
   ApiComparisonCellStatus,
+  ApiDecisionOutcomeStatus,
 } from '@trace/core';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -188,6 +189,13 @@ export function addRegret(commitId: string, note?: string) {
   return request<{ ok: boolean }>(`/commits/${commitId}/regret`, {
     method: 'POST',
     body: JSON.stringify({ note }),
+  });
+}
+
+export function setDecisionOutcome(commitId: string, status: ApiDecisionOutcomeStatus, note: string) {
+  return request<{ outcome: NonNullable<ApiCommit['outcome']> }>(`/commits/${commitId}/outcome`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, note }),
   });
 }
 

@@ -349,6 +349,7 @@ export class BrowserCaptureCoordinator {
 }
 
 function capturePriority(visit: BrowserExtensionVisit, existing?: SourceItem): 0 | 1 | 2 | 3 {
+  if (!isSafeCaptureUrl(visit.url)) return 0;
   if (visit.manual) return 3;
   if (existing?.branch_id || existing?.thread_id) return 2;
   if (existing) return 1;
@@ -356,7 +357,6 @@ function capturePriority(visit: BrowserExtensionVisit, existing?: SourceItem): 0
   try { url = new URL(visit.url); } catch { return 0; }
   const host = url.hostname.toLowerCase();
   const path = url.pathname.replace(/\/+$/, '') || '/';
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return 0;
   if ((host.includes('youtube.com') && (path === '/' || path.startsWith('/shorts'))) ||
       (host.includes('linkedin.com') && (path === '/feed' || path.startsWith('/notifications'))) ||
       ((host === 'reddit.com' || host === 'www.reddit.com') && path === '/')) return 0;
@@ -390,6 +390,7 @@ function isSafeCaptureUrl(value: string): boolean {
   let url: URL;
   try { url = new URL(value); } catch { return false; }
   if (!['http:', 'https:'].includes(url.protocol)) return false;
+  if (['localhost', '127.0.0.1', '::1'].includes(url.hostname.toLowerCase())) return false;
   const text = `${url.hostname}${url.pathname}`.toLowerCase();
   return !/(^|\.)(accounts|login|mail|outlook|proton|1password|bitwarden)\.|\/((sign|log)[-_]?in|auth|checkout|payment|bank|health|medical)(\/|$)/.test(text);
 }

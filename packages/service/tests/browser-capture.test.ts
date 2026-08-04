@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import type { Database } from 'better-sqlite3';
 import {
   CaptureAssetRepository,
+  BranchRepository,
   SourceItemRepository,
+  ThreadRepository,
   createInMemoryDatabase,
 } from '@trace/core';
 import type { AutonomousCoordinator } from '../src/automation.js';
@@ -115,7 +117,20 @@ describe('BrowserCaptureCoordinator', () => {
       url: 'http://127.0.0.1:3333/threads/example', title: 'Trace comparison', capturedAt: new Date().toISOString(), pageText: 'comparison '.repeat(100),
     });
     expect(result.status).toBe('ignored');
-    expect(items.findByUrl('http://127.0.0.1:3333/threads/example')[0].capture_reason).toBe('low_relevance');
+    expect(items.findByUrl('http://127.0.0.1:3333/threads/example')).toHaveLength(0);
+  });
+
+  it('rejects a previously known localhost URL before known-page priority is applied', () => {
+    const thread = new ThreadRepository(db).create({ title: 'Trace dashboard', tags: [], status: 'open' });
+    const branch = new BranchRepository(db).create({ thread_id: thread.id, parent_commit_id: null, context_label: 'Local' });
+    const known = items.create({ type: 'browser_history', raw_text: 'Known page', extracted_entities: null, url: 'http://localhost:3333/threads/known', captured_at: new Date().toISOString(), thread_id: thread.id });
+    items.assignToThread(known.id, thread.id, branch.id, 1);
+
+    const result = captures.considerExtensionVisit({ url: known.url!, title: 'Known Trace decision', capturedAt: new Date().toISOString(), pageText: 'compare options '.repeat(100) });
+
+    expect(result.status).toBe('ignored');
+    expect(items.getById(known.id)?.capture_status).toBe('not_requested');
+    expect(captures.next()).toBeUndefined();
   });
 
   it('prioritizes explicit research and manual captures over the ten-second soft limit', () => {

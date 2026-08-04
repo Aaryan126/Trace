@@ -200,7 +200,7 @@ export class AutonomousCoordinator {
     this.items.markAutomationStatus(item.id, 'processing');
     this.events.publish({ type: 'source.processing', sourceItemId: item.id });
     try {
-      const deterministicIgnore = obviousNoiseReason(item);
+      const deterministicIgnore = obviousNoiseReason(item) ?? this.recentDuplicateReason(item);
       if (deterministicIgnore) {
         const decision: AutonomousRouteDecision = {
           action: 'ignore', threadId: null, branchId: null, confidence: 1, rationale: deterministicIgnore,
@@ -250,11 +250,29 @@ export class AutonomousCoordinator {
     }
   }
 
+  private recentDuplicateReason(item: SourceItem): string | null {
+    if (item.type !== 'browser_history' || !item.url) return null;
+    const cutoff = new Date(new Date(item.captured_at).getTime() - 30 * 60_000).toISOString();
+    const prior = this.db.prepare(`
+      SELECT url FROM source_items
+      WHERE rowid < (SELECT rowid FROM source_items WHERE id = ?)
+        AND type = 'browser_history' AND url IS NOT NULL AND captured_at >= ?
+        AND automation_status IN ('processing', 'filed')
+      ORDER BY rowid DESC LIMIT 100
+    `).all(item.id, cutoff) as Array<{ url: string }>;
+    const normalized = normalizeResearchUrl(item.url);
+    return prior.some((candidate) => normalizeResearchUrl(candidate.url) === normalized)
+      ? 'Trace already filed this page in the current 30-minute research session.'
+      : null;
+  }
+
   private buildCandidates(vector: number[]) {
-    const semanticIds = vector.length ? this.embeddings.nearestThreads(vector, EMBEDDING_MODEL, 8).map((match) => match.threadId) : [];
+    const semanticMatches = vector.length ? this.embeddings.nearestThreads(vector, EMBEDDING_MODEL, 8) : [];
+    const semanticIds = semanticMatches.map((match) => match.threadId);
+    const similarityById = new Map(semanticMatches.map((match) => [match.threadId, match.similarity]));
     const recentIds = this.threads.list().slice(0, 12).map((thread) => thread.id);
     return [...new Set([...semanticIds, ...recentIds])].slice(0, 12).map((id) => this.threads.getById(id)).filter(Boolean).map((thread) => ({
-      id: thread!.id, title: thread!.title, status: thread!.status,
+      id: thread!.id, title: thread!.title, status: thread!.status, similarity: similarityById.get(thread!.id) ?? 0,
       branches: this.branches.listByThread(thread!.id).map((branch) => ({
         id: branch.id, contextLabel: branch.context_label,
         workingSummary: this.states.getByBranch(branch.id)?.summary ?? '',
@@ -266,6 +284,12 @@ export class AutonomousCoordinator {
 
   private validateDecision(decision: AutonomousRouteDecision, candidates: ReturnType<AutonomousCoordinator['buildCandidates']>, item: SourceItem): AutonomousRouteDecision {
     if (decision.action === 'ignore') return decision;
+    if (decision.action === 'new_thread') {
+      const equivalent = candidates.find((thread) => thread.similarity >= 0.94 && thread.branches.length === 1 && semanticAnchorOverlap(thread.title, `${decision.title ?? ''} ${decision.researchQuestion}`));
+      if (equivalent) {
+        return { ...decision, action: 'continue_branch', threadId: equivalent.id, branchId: equivalent.branches[0].id, title: null, rationale: `${decision.rationale} Trace matched this to the existing decision “${equivalent.title}”.` };
+      }
+    }
     const candidate = candidates.find((thread) => thread.id === decision.threadId);
     if (decision.action === 'new_thread' || !candidate) {
       return { ...decision, action: 'new_thread', threadId: null, branchId: null, title: decision.title?.trim() || decision.researchQuestion.trim() || item.raw_text?.slice(0, 100) || 'New research decision' };
@@ -357,21 +381,22 @@ export class AutonomousCoordinator {
       const evidence = sourceIds.map((id) => this.items.getById(id)).filter(Boolean).map((item) => ({ text: [item!.raw_text, item!.content_text, item!.visual_context].filter(Boolean).join('\n').slice(0, 12_000), url: item!.url }));
       const prior = this.commits.listByBranch(branchId);
       const synthesis = await this.ai.synthesizeCheckpoint({ threadTitle: thread.title, workingState: { ...state }, evidence, previousVerdicts: prior.map((commit) => commit.verdict_summary) });
-      const commit = this.commits.create({ branch_id: branchId, verdict_summary: synthesis.verdict, reasoning: synthesis.reasoning, source_item_ids: sourceIds, kind: synthesis.resolutionStatus === 'resolved' ? 'resolved' : 'checkpoint', resolution_status: synthesis.resolutionStatus, comparison: state.comparison });
-      if (synthesis.resolutionStatus === 'resolved') this.threads.updateStatus(thread.id, 'closed');
+      const resolutionStatus = shouldPromoteActionableDecision(synthesis, state) ? 'resolved' : synthesis.resolutionStatus;
+      const commit = this.commits.create({ branch_id: branchId, verdict_summary: synthesis.verdict, reasoning: synthesis.reasoning, source_item_ids: sourceIds, kind: resolutionStatus === 'resolved' ? 'resolved' : 'checkpoint', resolution_status: resolutionStatus, comparison: state.comparison });
+      if (resolutionStatus === 'resolved') this.threads.updateStatus(thread.id, 'closed');
       this.states.setStatus(branchId, 'active');
       this.feed.create({
         type: 'commit_closed',
         thread_id: thread.id,
         payload: {
           verdict: synthesis.verdict,
-          resolutionStatus: synthesis.resolutionStatus,
+          resolutionStatus,
           kind: commit.kind,
           branchId,
           commitId: commit.id,
         },
       });
-      this.actions.create({ action: 'checkpoint', source_item_id: null, thread_id: thread.id, branch_id: branchId, model: 'gpt-5.6-sol', confidence: null, rationale: synthesis.reasoning, context_snapshot: { evidenceIds: sourceIds }, before_snapshot: {}, after_snapshot: { commitId: commit.id, resolutionStatus: synthesis.resolutionStatus }, latency_ms: null, status: 'applied', undoable: false });
+      this.actions.create({ action: 'checkpoint', source_item_id: null, thread_id: thread.id, branch_id: branchId, model: 'gpt-5.6-sol', confidence: null, rationale: synthesis.reasoning, context_snapshot: { evidenceIds: sourceIds }, before_snapshot: {}, after_snapshot: { commitId: commit.id, resolutionStatus, policyPromoted: synthesis.resolutionStatus !== resolutionStatus }, latency_ms: null, status: 'applied', undoable: false });
       this.events.publish({ type: 'checkpoint.created', threadId: thread.id, branchId });
       await this.queueReconciliation(thread.id).catch(() => 0);
     } catch {
@@ -416,7 +441,7 @@ export class AutonomousCoordinator {
       return 0;
     }
     const commit = this.commits.create({ branch_id: decision.targetBranchId, verdict_summary: decision.durableRule, reasoning: decision.rationale, source_item_ids: [], kind: 'merge', resolution_status: 'resolved' });
-    this.merges.create({ thread_id: thread.id, source_branch_ids: ids, resulting_commit_id: commit.id, resolved_rule: decision.durableRule });
+    this.merges.create({ thread_id: thread.id, source_branch_ids: ids, resulting_commit_id: commit.id, resolved_rule: decision.durableRule, origin: 'automatic' });
     this.threads.updateStatus(thread.id, 'closed');
     const action = this.actions.create({ action: 'merge', source_item_id: null, thread_id: thread.id, branch_id: decision.targetBranchId, model: 'gpt-5.6-sol', confidence: decision.confidence, rationale: decision.rationale, context_snapshot: { sourceBranchIds: ids }, before_snapshot: {}, after_snapshot: { commitId: commit.id, durableRule: decision.durableRule }, latency_ms: null, status: 'applied', undoable: false });
     this.events.publish({ type: 'merge.created', threadId: thread.id, branchId: decision.targetBranchId, actionId: action.id });
@@ -437,7 +462,7 @@ function comparisonKey(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 72) || 'unknown';
 }
 
-function mergeComparison(
+export function mergeComparison(
   previous: ComparisonMatrix | undefined,
   optionLabels: string[],
   updates: NonNullable<AutonomousRouteDecision['comparisonUpdates']>,
@@ -460,12 +485,63 @@ function mergeComparison(
       matrix.cells.push({ option_id: optionId, criterion_id: criterionId, value: update.value.trim(), status: update.status, source_item_ids: update.status === 'unknown' ? [] : [sourceItemId] });
       continue;
     }
-    const conflicts = existing.status === 'supported' && update.status === 'supported' && existing.value.toLowerCase() !== update.value.trim().toLowerCase();
-    existing.value = conflicts ? `${existing.value} · ${update.value.trim()}` : update.value.trim();
-    existing.status = conflicts ? 'conflicting' : update.status;
+    const nextValue = update.value.trim();
+    const explicitConflict = existing.status === 'conflicting' || update.status === 'conflicting';
+    if (existing.status === 'supported' && update.status === 'supported') {
+      if (semanticallyEquivalent(existing.value, nextValue)) existing.value = existing.value.length >= nextValue.length ? existing.value : nextValue;
+      else existing.value = [existing.value, nextValue].filter(Boolean).join(' · ');
+      existing.status = 'supported';
+    } else if (update.status !== 'unknown') {
+      existing.value = explicitConflict && existing.value && !semanticallyEquivalent(existing.value, nextValue)
+        ? `${existing.value} · ${nextValue}`
+        : nextValue;
+      existing.status = explicitConflict ? 'conflicting' : update.status;
+    }
     existing.source_item_ids = [...new Set([...existing.source_item_ids, ...(update.status === 'unknown' ? [] : [sourceItemId])])];
   }
   return matrix;
+}
+
+function semanticallyEquivalent(left: string, right: string): boolean {
+  const negated = (value: string) => /\b(no|not|never|without|cannot|can't|doesn't|isn't)\b/i.test(value);
+  if (negated(left) !== negated(right)) return false;
+  const numbers = (value: string) => value.match(/\b\d+(?:\.\d+)?%?\b/g)?.join('|') ?? '';
+  if (numbers(left) && numbers(right) && numbers(left) !== numbers(right)) return false;
+  const tokens = (value: string) => new Set(value.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length > 2 && !COMPARISON_STOP_WORDS.has(token)) ?? []);
+  const a = tokens(left); const b = tokens(right);
+  if (!a.size || !b.size) return left.trim().toLowerCase() === right.trim().toLowerCase();
+  const intersection = [...a].filter((token) => b.has(token)).length;
+  return intersection / Math.min(a.size, b.size) >= 0.72;
+}
+
+const COMPARISON_STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'than', 'but', 'use', 'uses']);
+
+function semanticAnchorOverlap(left: string, right: string): boolean {
+  const anchors = (value: string) => new Set(value.toLowerCase().match(/[a-z0-9]+/g)?.map((token) => token.length > 4 && token.endsWith('s') ? token.slice(0, -1) : token).filter((token) => token.length >= 3 && !THREAD_STOP_WORDS.has(token)) ?? []);
+  const a = anchors(left); const b = anchors(right);
+  return [...a].some((token) => b.has(token));
+}
+
+const THREAD_STOP_WORDS = new Set(['choose', 'compare', 'determine', 'best', 'across', 'model', 'models', 'service', 'services', 'option', 'options', 'tool', 'tools']);
+
+function shouldPromoteActionableDecision(
+  synthesis: { verdict: string; resolutionStatus: 'in_progress' | 'resolved' },
+  state: { tentative_direction: string | null; open_questions: string[] },
+): boolean {
+  if (synthesis.resolutionStatus === 'resolved') return true;
+  const direction = `${state.tentative_direction ?? ''} ${synthesis.verdict}`.toLowerCase();
+  if (!/\b(use|choose|prefer|keep|default|recommend|select|adopt|avoid)\b/.test(direction)) return false;
+  return state.open_questions.every((question) => /\b(confirm|verify|validate|monitor|measure|test|benchmark|exact|follow.?up|later|edge case|nice to have)\b/i.test(question));
+}
+
+function normalizeResearchUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    for (const key of [...url.searchParams.keys()]) if (/^(utm_.*|fbclid|gclid|ref|source)$/i.test(key)) url.searchParams.delete(key);
+    url.pathname = url.pathname.replace(/\/$/, '') || '/';
+    return url.toString();
+  } catch { return value.trim(); }
 }
 
 function obviousNoiseReason(item: SourceItem): string | null {

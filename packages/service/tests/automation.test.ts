@@ -5,6 +5,7 @@ import {
   BranchRepository,
   CommitRepository,
   createInMemoryDatabase,
+  EmbeddingRepository,
   SourceItemRepository,
   MergeEventRepository,
   ThreadRepository,
@@ -12,7 +13,7 @@ import {
   WorkingStateRepository,
   type AutonomousRouteDecision,
 } from '@trace/core';
-import { AutonomousCoordinator } from '../src/automation.js';
+import { AutonomousCoordinator, mergeComparison } from '../src/automation.js';
 
 let db: Database;
 let items: SourceItemRepository;
@@ -95,6 +96,35 @@ describe('AutonomousCoordinator', () => {
     expect(actions.list()[0]).toMatchObject({ action: 'ignore', model: null, confidence: 1 });
   });
 
+  it('suppresses the same normalized URL within one research session', async () => {
+    const earlier = items.create({ type: 'browser_history', raw_text: 'Database comparison', extracted_entities: null, url: 'https://example.com/compare?utm_source=newsletter', captured_at: new Date().toISOString(), thread_id: null });
+    items.markProcessed(earlier.id);
+    const duplicate = items.create({ type: 'browser_history', raw_text: 'Same comparison again', extracted_entities: null, url: 'https://example.com/compare?utm_source=other#section', captured_at: new Date().toISOString(), thread_id: null });
+
+    await coordinator.recover();
+
+    expect(routeResearch).not.toHaveBeenCalled();
+    expect(items.getById(duplicate.id)?.automation_status).toBe('ignored');
+    expect(actions.list()[0].rationale).toContain('already filed this page');
+  });
+
+  it('routes a semantically equivalent core question into the existing thread', async () => {
+    await coordinator.close();
+    const thread = threads.create({ title: 'Determine the best LLM', tags: [], status: 'open' });
+    const branch = branches.create({ thread_id: thread.id, parent_commit_id: null, context_label: 'General evaluation' });
+    new EmbeddingRepository(db).upsert('thread', thread.id, 'text-embedding-3-small', [1, 0]);
+    routeResearch.mockResolvedValue({ ...baseDecision, action: 'new_thread', title: 'Compare LLMs across cost and intelligence', researchQuestion: 'Which LLM is best across cost and intelligence?' });
+    const ai = { routeResearch, embed: vi.fn().mockResolvedValue([1, 0]), synthesizeCheckpoint, reconcileBranches } as unknown as TraceAI;
+    coordinator = new AutonomousCoordinator(db, ai, { debounceMs: 1, checkpointQuietSeconds: 3_600 });
+    const item = createEvidence();
+
+    await coordinator.recover();
+
+    expect(threads.list()).toHaveLength(1);
+    expect(items.getById(item.id)).toMatchObject({ thread_id: thread.id, branch_id: branch.id });
+    expect(actions.list()[0].rationale).toContain('matched this to the existing decision');
+  });
+
   it('automatically retries failed routing after the short in-process delay', async () => {
     await coordinator.close();
     routeResearch.mockRejectedValueOnce(new Error('temporary routing failure')).mockResolvedValue(baseDecision);
@@ -164,6 +194,21 @@ describe('AutonomousCoordinator', () => {
     expect(reconcileBranches).toHaveBeenCalledTimes(1);
   });
 
+  it('resolves an actionable recommendation when only minor validation remains', async () => {
+    await coordinator.close();
+    routeResearch.mockResolvedValue({ ...baseDecision, tentativeDirection: 'Use SQLite by default.', openQuestions: ['Verify exact write performance in a later benchmark.'] });
+    synthesizeCheckpoint.mockResolvedValue({ verdict: 'Use SQLite by default', reasoning: 'It satisfies the current local-first constraints; benchmark performance later.', resolutionStatus: 'in_progress' });
+    const ai = { routeResearch, embed: vi.fn().mockResolvedValue([]), synthesizeCheckpoint, reconcileBranches } as unknown as TraceAI;
+    coordinator = new AutonomousCoordinator(db, ai, { debounceMs: 1, checkpointQuietSeconds: 0.01 });
+    createEvidence();
+
+    await coordinator.recover();
+
+    await vi.waitFor(() => expect(new CommitRepository(db).getLatestByThread(threads.list()[0].id)?.resolution_status).toBe('resolved'));
+    expect(threads.list()[0].status).toBe('closed');
+    expect(actions.list().find((action) => action.action === 'checkpoint')?.after_snapshot).toMatchObject({ policyPromoted: true });
+  });
+
   it('continues the same branch when a closed decision is revisited in the same context', async () => {
     const thread = threads.create({ title: 'Choose database', tags: [], status: 'closed' });
     const branch = branches.create({ thread_id: thread.id, parent_commit_id: null, context_label: 'Original context' });
@@ -197,7 +242,7 @@ describe('AutonomousCoordinator', () => {
     reconcileBranches.mockResolvedValue({ action: 'merge', confidence: 0.97, rationale: 'The contexts form a stable boundary.', sourceBranchIds: [branchA.id, branchB.id], targetBranchId: branchA.id, durableRule: 'Use SQLite locally; Postgres for hosted multi-user services.' });
 
     expect(await coordinator.reconcile()).toEqual({ checkpointed: 0, merged: 1 });
-    expect(new MergeEventRepository(db).listByThread(thread.id)).toHaveLength(1);
+    expect(new MergeEventRepository(db).listByThread(thread.id)).toEqual([expect.objectContaining({ origin: 'automatic' })]);
     expect(commits.listByBranch(branchA.id).at(-1)).toMatchObject({ kind: 'merge', resolution_status: 'resolved' });
     expect(threads.getById(thread.id)?.status).toBe('closed');
   });
@@ -214,5 +259,24 @@ describe('AutonomousCoordinator', () => {
     expect(await coordinator.reconcile()).toEqual({ checkpointed: 0, merged: 0 });
     expect(reconcileBranches).toHaveBeenCalledTimes(1);
     expect(actions.list().filter((action) => action.action === 'reconcile_none')).toHaveLength(1);
+  });
+});
+
+describe('mergeComparison', () => {
+  it('keeps equivalent supported claims supported and does not duplicate their text', () => {
+    const previous = { options: [{ id: 'sqlite', label: 'SQLite' }], criteria: [{ id: 'deployment', label: 'Deployment' }], cells: [{ option_id: 'sqlite', criterion_id: 'deployment', value: 'SQLite uses a single local database file', status: 'supported' as const, source_item_ids: ['source-1'] }] };
+    const result = mergeComparison(previous, ['SQLite'], [{ option: 'SQLite', criterion: 'Deployment', value: 'A single local database file is used by SQLite', status: 'supported' }], 'source-2');
+
+    expect(result.cells[0].status).toBe('supported');
+    expect(result.cells[0].value).not.toContain(' · ');
+    expect(result.cells[0].source_item_ids).toEqual(['source-1', 'source-2']);
+  });
+
+  it('retains distinct compatible supported facts without labelling them conflicting', () => {
+    const previous = { options: [{ id: 'sqlite', label: 'SQLite' }], criteria: [{ id: 'cost', label: 'Cost' }], cells: [{ option_id: 'sqlite', criterion_id: 'cost', value: 'No server license', status: 'supported' as const, source_item_ids: ['source-1'] }] };
+    const result = mergeComparison(previous, ['SQLite'], [{ option: 'SQLite', criterion: 'Cost', value: 'Hosting cost depends on deployment', status: 'supported' }], 'source-2');
+
+    expect(result.cells[0].status).toBe('supported');
+    expect(result.cells[0].value).toContain(' · ');
   });
 });
