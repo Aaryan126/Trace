@@ -36,6 +36,13 @@ export class BranchRepository {
     return rows.map(toBranch);
   }
 
+  getNewestByThread(threadId: string): Branch | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM branches WHERE thread_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
+      .get(threadId) as RawBranch | undefined;
+    return row ? toBranch(row) : undefined;
+  }
+
   reassignThread(branchId: string, newThreadId: string): Branch | undefined {
     this.db.prepare('UPDATE branches SET thread_id = ? WHERE id = ?').run(newThreadId, branchId);
     return this.getById(branchId);

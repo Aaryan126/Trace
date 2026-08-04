@@ -57,7 +57,7 @@ export class SynthesisAgent {
     // All items assigned to this thread
     const allItems = this.sourceItemRepo.listByThread(thread.id);
 
-    // Collect IDs of items already included in any commit on this thread's branches
+    // Collect IDs of items already included in any commit on this thread's branches.
     const committedIds = new Set<string>();
     const branches = this.branchRepo.listByThread(thread.id);
     for (const branch of branches) {
@@ -67,54 +67,68 @@ export class SynthesisAgent {
       }
     }
 
-    // Uncommitted items: processed and not already in a commit
+    // Uncommitted items: processed and not already in a commit.
     const uncommitted = allItems.filter((item) => item.processed && !committedIds.has(item.id));
+    const fallbackBranch = this.branchRepo.getNewestByThread(thread.id);
+    const itemsByBranch = new Map<string, SourceItem[]>();
+    for (const item of uncommitted) {
+      const branchId = item.branch_id ?? fallbackBranch?.id;
+      if (!branchId) continue;
+      const group = itemsByBranch.get(branchId) ?? [];
+      group.push(item);
+      itemsByBranch.set(branchId, group);
+    }
 
-    if (uncommitted.length < minItems) return 'skipped';
+    let synthesized = false;
+    const synthesizedItemIds = new Set<string>();
+    for (const [branchId, items] of itemsByBranch) {
+      if (items.length < minItems) continue;
+      const mostRecent = items.reduce<SourceItem>((latest, item) =>
+        item.captured_at > latest.captured_at ? item : latest,
+        items[0],
+      );
+      const hoursSinceLastItem = (Date.now() - new Date(mostRecent.captured_at).getTime()) / 3_600_000;
+      if (hoursSinceLastItem < quietWindowHours) continue;
 
-    // Check quiet window: most recent captured_at must be older than quietWindowHours
-    const mostRecent = uncommitted.reduce<SourceItem>((latest, item) =>
-      item.captured_at > latest.captured_at ? item : latest,
-      uncommitted[0],
-    );
-    const hoursSinceLastItem = (Date.now() - new Date(mostRecent.captured_at).getTime()) / 3_600_000;
-    if (hoursSinceLastItem < quietWindowHours) return 'skipped';
+      const previousCommits = this.commitRepo.listByBranch(branchId).map((commit) => ({
+        verdict_summary: commit.verdict_summary,
+      }));
+      const result = await this.ai.synthesizeCommit(
+        items.map((item) => ({
+          text: item.raw_text ?? '',
+          url: item.url,
+          entities: extractEntities(item.extracted_entities),
+        })),
+        { title: thread.title, previousCommits },
+      );
+      const commit = this.commitRepo.create({
+        branch_id: branchId,
+        verdict_summary: result.verdict,
+        reasoning: result.reasoning,
+        source_item_ids: items.map((item) => item.id),
+      });
+      this.feedEventRepo.create({
+        type: 'commit_closed',
+        thread_id: thread.id,
+        payload: { threadId: thread.id, branchId, commitId: commit.id, verdict: result.verdict },
+      });
+      for (const item of items) synthesizedItemIds.add(item.id);
+      synthesized = true;
+    }
 
-    // Trunk branch: parent_commit_id === null
-    const trunk = branches.find((b) => b.parent_commit_id === null);
-    if (!trunk) return 'skipped';
-
-    // Previous commits on trunk for context
-    const previousCommits = this.commitRepo.listByBranch(trunk.id).map((c) => ({
-      verdict_summary: c.verdict_summary,
-    }));
-
-    const itemsForAI = uncommitted.map((item) => ({
-      text: item.raw_text ?? '',
-      url: item.url,
-      entities: item.extracted_entities ? (Object.keys(item.extracted_entities) as string[]) : [],
-    }));
-
-    const result = await this.ai.synthesizeCommit(itemsForAI, {
-      title: thread.title,
-      previousCommits,
-    });
-
-    const commit = this.commitRepo.create({
-      branch_id: trunk.id,
-      verdict_summary: result.verdict,
-      reasoning: result.reasoning,
-      source_item_ids: uncommitted.map((i) => i.id),
-    });
-
-    this.threadRepo.updateStatus(thread.id, 'closed');
-
-    this.feedEventRepo.create({
-      type: 'commit_closed',
-      thread_id: thread.id,
-      payload: { threadId: thread.id, commitId: commit.id, verdict: result.verdict },
-    });
-
+    if (!synthesized) return 'skipped';
+    const hasPendingItems = allItems.some((item) => !item.processed)
+      || uncommitted.some((item) => !synthesizedItemIds.has(item.id));
+    if (!hasPendingItems) this.threadRepo.updateStatus(thread.id, 'closed');
     return 'synthesized';
   }
+}
+
+function extractEntities(value: Record<string, unknown> | null): string[] {
+  if (!value) return [];
+  return Object.values(value).flatMap((entry) => {
+    if (typeof entry === 'string') return [entry];
+    if (Array.isArray(entry)) return entry.filter((item): item is string => typeof item === 'string');
+    return [];
+  });
 }

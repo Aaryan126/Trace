@@ -9,19 +9,24 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@trace/core": "workspace:*",
+    "@xyflow/react": "^12.11.2",
+    "motion": "^12.43.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0",
-    "tailwindcss": "^4.0.0",
-    "@tailwindcss/vite": "^4.0.0"
+    "tailwindcss": "^4.0.0"
   },
   "devDependencies": {
-    "vite": "^6.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/dagre": "^0.7.54",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/jest-dom": "^6.5.0",
-    "jsdom": "^25.0.0"
+    "@vitejs/plugin-react": "^4.3.0",
+    "jsdom": "^25.0.0",
+    "vite": "^6.0.0"
   }
 }

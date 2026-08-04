@@ -28,9 +28,15 @@ function mockAI(overrides: Partial<TraceAI> = {}): TraceAI {
   } as unknown as TraceAI;
 }
 
-function createItem(opts: { rawText?: string; capturedAt?: string; threadId?: string; processed?: boolean } = {}) {
+function createItem(opts: {
+  rawText?: string;
+  capturedAt?: string;
+  threadId?: string;
+  processed?: boolean;
+  type?: 'screenshot' | 'browser_history';
+} = {}) {
   const item = sourceItemRepo.create({
-    type: 'browser_history',
+    type: opts.type ?? 'browser_history',
     raw_text: opts.rawText ?? 'test item',
     extracted_entities: null,
     url: null,
@@ -74,7 +80,7 @@ describe('ClusteringAgent', () => {
     const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
     const result = await agent.run();
 
-    expect(result).toEqual({ processed: 1, newThreads: 0, reopened: 0 });
+    expect(result).toEqual({ processed: 1, newThreads: 0, reopened: 0, ignored: 0, needsReview: 0 });
 
     const updated = sourceItemRepo.getById(item.id)!;
     expect(updated.thread_id).toBe(thread.id);
@@ -96,7 +102,7 @@ describe('ClusteringAgent', () => {
     const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
     const result = await agent.run();
 
-    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0 });
+    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0, ignored: 0, needsReview: 1 });
 
     const updated = sourceItemRepo.getById(item.id)!;
     expect(updated.thread_id).toBe(thread.id);
@@ -118,7 +124,7 @@ describe('ClusteringAgent', () => {
     const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
     const result = await agent.run();
 
-    expect(result).toEqual({ processed: 1, newThreads: 1, reopened: 0 });
+    expect(result).toEqual({ processed: 1, newThreads: 1, reopened: 0, ignored: 0, needsReview: 0 });
 
     const threads = threadRepo.list();
     expect(threads).toHaveLength(1);
@@ -148,7 +154,7 @@ describe('ClusteringAgent', () => {
     const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
     const result = await agent.run();
 
-    expect(result).toEqual({ processed: 1, newThreads: 0, reopened: 1 });
+    expect(result).toEqual({ processed: 1, newThreads: 0, reopened: 1, ignored: 0, needsReview: 0 });
 
     const reopened = threadRepo.getById(thread.id)!;
     expect(reopened.status).toBe('open');
@@ -156,18 +162,20 @@ describe('ClusteringAgent', () => {
     const events = feedEventRepo.list({ limit: 10, offset: 0 });
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('reopen');
-    expect(events[0].payload).toEqual({
+    expect(events[0].payload).toMatchObject({
       threadId: thread.id,
       itemId: item.id,
-      reason: 'New activity detected',
+      reason: 'New context detected',
     });
+    expect(events[0].payload.branchId).toBeDefined();
+    expect(branchRepo.listByThread(thread.id)).toHaveLength(2);
   });
 
   it('returns zero stats when there are no unprocessed items', async () => {
     const ai = mockAI();
     const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
     const result = await agent.run();
-    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0 });
+    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0, ignored: 0, needsReview: 0 });
     expect(ai.clusterItem).not.toHaveBeenCalled();
   });
 
@@ -201,6 +209,85 @@ describe('ClusteringAgent', () => {
     const processed = sourceItemRepo.getById(item2.id)!;
     expect(processed.processed).toBe(true);
     expect(processed.thread_id).not.toBeNull();
+  });
+
+  it('marks irrelevant browsing as ignored without creating a thread', async () => {
+    const item = createItem({ rawText: 'Reddit homepage' });
+    const ai = mockAI({
+      clusterItem: vi.fn().mockResolvedValue({
+        decision: 'ignore',
+        threadId: null,
+        confidence: 0.98,
+        reason: 'General browsing with no decision intent',
+      }),
+    });
+
+    const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
+    const result = await agent.run();
+
+    expect(result).toEqual({ processed: 1, newThreads: 0, reopened: 0, ignored: 1, needsReview: 0 });
+    expect(threadRepo.list()).toHaveLength(0);
+    expect(sourceItemRepo.getById(item.id)).toMatchObject({
+      processed: true,
+      thread_id: null,
+      branch_id: null,
+      clustering_confidence: 0.98,
+    });
+  });
+
+  it('keeps a low-confidence ignore decision in Capture for review', async () => {
+    const item = createItem({ rawText: 'Could be product research or casual browsing' });
+    const ai = mockAI({
+      clusterItem: vi.fn().mockResolvedValue({
+        decision: 'ignore',
+        threadId: null,
+        confidence: 0.55,
+        reason: 'Unclear intent',
+      }),
+    });
+
+    const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
+    const result = await agent.run();
+
+    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0, ignored: 0, needsReview: 1 });
+    expect(sourceItemRepo.getById(item.id)).toMatchObject({ processed: false, thread_id: null });
+  });
+
+  it('keeps an uncertain new browser-history decision in Capture without creating a thread', async () => {
+    const item = createItem({ rawText: 'A possible database comparison' });
+    const ai = mockAI({
+      clusterItem: vi.fn().mockResolvedValue({
+        decision: 'new',
+        threadId: null,
+        confidence: 0.82,
+        suggestedTitle: 'Database choice',
+      }),
+    });
+
+    const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
+    const result = await agent.run();
+
+    expect(result).toEqual({ processed: 0, newThreads: 0, reopened: 0, ignored: 0, needsReview: 1 });
+    expect(threadRepo.list()).toHaveLength(0);
+    expect(sourceItemRepo.getById(item.id)).toMatchObject({ processed: false, thread_id: null });
+  });
+
+  it('uses the normal threshold for screenshots', async () => {
+    const item = createItem({ type: 'screenshot', rawText: 'Compare Postgres and MongoDB' });
+    const ai = mockAI({
+      clusterItem: vi.fn().mockResolvedValue({
+        decision: 'new',
+        threadId: null,
+        confidence: 0.75,
+        suggestedTitle: 'Postgres or MongoDB?',
+      }),
+    });
+
+    const agent = new ClusteringAgent(db, ai, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
+    const result = await agent.run();
+
+    expect(result.newThreads).toBe(1);
+    expect(sourceItemRepo.getById(item.id)?.processed).toBe(true);
   });
 });
 
@@ -331,6 +418,37 @@ describe('SynthesisAgent', () => {
       expect(newCommit.source_item_ids).not.toContain(id);
     }
   });
+
+  it('synthesizes reopened context on its own branch', async () => {
+    const { thread, branch: trunk } = createThreadWithTrunk('Context-specific decision');
+    const prior = commitRepo.create({
+      branch_id: trunk.id,
+      verdict_summary: 'Original verdict',
+      reasoning: 'Original context',
+      source_item_ids: [],
+    });
+    const reopened = branchRepo.create({
+      thread_id: thread.id,
+      parent_commit_id: prior.id,
+      context_label: 'New security constraint',
+    });
+    const first = createItem({ rawText: 'security item one', capturedAt: oldDate(48), threadId: thread.id, processed: true });
+    const second = createItem({ rawText: 'security item two', capturedAt: oldDate(30), threadId: thread.id, processed: true });
+    const pending = createItem({ rawText: 'unresolved trunk item', capturedAt: oldDate(30), threadId: thread.id, processed: true });
+    sourceItemRepo.assignToThread(first.id, thread.id, reopened.id, 0.9);
+    sourceItemRepo.assignToThread(second.id, thread.id, reopened.id, 0.9);
+    sourceItemRepo.assignToThread(pending.id, thread.id, trunk.id, 0.9);
+
+    const ai = mockAI({
+      synthesizeCommit: vi.fn().mockResolvedValue({ verdict: 'Revised verdict', reasoning: 'Security changed' }),
+    });
+    const agent = new SynthesisAgent(db, ai, { quietWindowHours: 24 }, threadRepo, branchRepo, commitRepo, sourceItemRepo, feedEventRepo);
+    await agent.run();
+
+    expect(commitRepo.listByBranch(trunk.id)).toHaveLength(1);
+    expect(commitRepo.listByBranch(reopened.id)[0].source_item_ids.sort()).toEqual([first.id, second.id].sort());
+    expect(threadRepo.getById(thread.id)?.status).toBe('open');
+  });
 });
 
 // ─── CorrectionAgent ─────────────────────────────────────────────────────────
@@ -339,7 +457,7 @@ describe('CorrectionAgent', () => {
   let correctionAgent: CorrectionAgent;
 
   beforeEach(() => {
-    correctionAgent = new CorrectionAgent(db, threadRepo, branchRepo, sourceItemRepo, feedEventRepo);
+    correctionAgent = new CorrectionAgent(threadRepo, branchRepo, sourceItemRepo);
   });
 
   it('reassign updates item thread_id and marks processed', () => {
@@ -355,11 +473,12 @@ describe('CorrectionAgent', () => {
   });
 
   it('mergeThreads moves items and branches to target, deletes source', () => {
-    const { thread: source } = createThreadWithTrunk('Source Thread');
+    const { thread: source, branch: sourceBranch } = createThreadWithTrunk('Source Thread');
     const { thread: target } = createThreadWithTrunk('Target Thread');
 
     const item1 = createItem({ rawText: 'item1', threadId: source.id });
     const item2 = createItem({ rawText: 'item2', threadId: source.id });
+    sourceItemRepo.assignToThread(item1.id, source.id, sourceBranch.id, 0.9);
     // source already has a trunk branch; add another branch to source
     const extraBranch = branchRepo.create({ thread_id: source.id, parent_commit_id: null, context_label: 'alt' });
 
@@ -371,6 +490,7 @@ describe('CorrectionAgent', () => {
     // Items moved to target
     expect(sourceItemRepo.getById(item1.id)!.thread_id).toBe(target.id);
     expect(sourceItemRepo.getById(item2.id)!.thread_id).toBe(target.id);
+    expect(sourceItemRepo.getById(item1.id)!.branch_id).toBe(sourceBranch.id);
 
     // Branches moved to target
     const targetBranches = branchRepo.listByThread(target.id);

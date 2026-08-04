@@ -1,41 +1,40 @@
 ---
 name: trace-synthesis
-description: Synthesizes decision commits when research threads go quiet, closing sessions with verdicts.
+description: Reconciles due checkpoints and compatible research branches as a background safety pass.
 metadata:
   openclaw:
     requires:
-      env: ["OPENAI_API_KEY"]
-      bins: ["node"]
+      bins: ["pnpm"]
     os: ["darwin"]
 ---
 
-# Trace Synthesis
+# Trace Checkpoint Reconciliation
 
-You manage Trace's synthesis agent. When a decision thread has been quiet (no new items) for a configurable window (default: 24 hours), this skill synthesizes a commit — a clear verdict and reasoning from the research session.
+The Trace service creates checkpoints after 90 seconds of inactivity. This OpenClaw skill is a safety pass for checkpoints missed during downtime and for high-confidence branch reconciliation.
 
 ## What it does
 
-1. Finds open threads with no recent activity (past the quiet window)
-2. Gathers all uncommitted source items for the thread
-3. Synthesizes a verdict: what was decided and why
-4. Creates a commit on the thread's trunk branch
-5. Closes the thread
-6. Emits a `commit_closed` feed event for the dashboard
+1. Writes any overdue in-progress/resolved checkpoints
+2. Compares branches that have durable verdicts
+3. Merges only compatible branches at 95%+ confidence
+4. Records the rule, confidence, rationale, and resulting commit in the audit log
 
 ## When to run
 
-- Scheduled via cron every 6 hours: checks for quiet threads and synthesizes
-- Can be triggered manually: "synthesize quiet threads", "close stale research"
+- Scheduled every 15 minutes as a recovery/reconciliation safety job
+- Can be triggered manually: "reconcile Trace"
 
 ## Cron setup
 
 ```bash
-openclaw cron create --every 6h --name "trace-synthesis" --session isolated \
-  --system-event "Run Trace synthesis: close quiet threads into commits"
+cd /Users/aaryan/Desktop/Trace
+pnpm --filter @trace/service cli reconcile
 ```
+
+`./scripts/setup-cron.sh` declares the 15-minute OpenClaw command job idempotently.
 
 ## Safety constraints
 
 - Only writes commits to existing threads in the local SQLite database
-- Requires at least 2 source items before synthesizing (no single-item verdicts)
+- Does not merge branches below the 95% confidence gate
 - Thread closure is reversible (threads can be reopened by new activity)

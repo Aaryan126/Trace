@@ -6,12 +6,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "cli": "tsx src/cli.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "fastify": "^5.0.0",
     "@fastify/cors": "^10.0.0",
+    "@fastify/static": "^8.0.0",
     "chokidar": "^4.0.0",
     "@trace/core": "workspace:*"
   },

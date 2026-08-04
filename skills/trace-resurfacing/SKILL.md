@@ -4,8 +4,7 @@ description: Detects reopened decision threads, generates context diffs, and cre
 metadata:
   openclaw:
     requires:
-      env: ["OPENAI_API_KEY"]
-      bins: ["node"]
+      bins: ["pnpm"]
     os: ["darwin"]
 ---
 
@@ -29,18 +28,17 @@ For open threads with ongoing activity:
 
 ## When to run
 
-- Reopen check: every hour via cron
+- Reopen state is visible immediately in Live Trace
 - Weekly digest: Monday 9 AM via cron
 
 ## Cron setup
 
 ```bash
-openclaw cron create --every 1h --name "trace-resurface-check" --session isolated \
-  --system-event "Run Trace resurfacing: check for reopens and generate diffs"
-
-openclaw cron create --cron "0 9 * * 1" --tz "America/New_York" --name "trace-weekly-digest" --session isolated \
-  --system-event "Run Trace weekly digest for open threads"
+cd /Users/aaryan/Desktop/Trace
+pnpm --filter @trace/service cli digest
 ```
+
+`./scripts/setup-cron.sh` declares the Monday 09:00 Asia/Singapore digest job idempotently. Five-minute recovery and 15-minute reconciliation cover missed live work.
 
 ## Safety constraints
 

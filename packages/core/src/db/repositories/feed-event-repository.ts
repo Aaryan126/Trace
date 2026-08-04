@@ -40,10 +40,21 @@ export class FeedEventRepository {
     return rows.map(toFeedEvent);
   }
 
+  listAll(): FeedEvent[] {
+    return (this.db.prepare('SELECT * FROM feed_events ORDER BY created_at DESC, rowid DESC').all() as RawFeedEvent[])
+      .map(toFeedEvent);
+  }
+
   markRead(id: string): FeedEvent | undefined {
     this.db.prepare('UPDATE feed_events SET read = 1 WHERE id = ?').run(id);
     const row = this.db.prepare('SELECT * FROM feed_events WHERE id = ?').get(id) as RawFeedEvent | undefined;
     return row ? toFeedEvent(row) : undefined;
+  }
+
+  markReadMany(ids: string[]): number {
+    if (ids.length === 0) return 0;
+    const update = this.db.prepare('UPDATE feed_events SET read = 1 WHERE id = ?');
+    return this.db.transaction((eventIds: string[]) => eventIds.reduce((count, id) => count + update.run(id).changes, 0))(ids);
   }
 
   countUnread(): number {

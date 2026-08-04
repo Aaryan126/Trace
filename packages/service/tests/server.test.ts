@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { Database } from 'better-sqlite3';
 import {
+  CaptureAssetRepository,
   createInMemoryDatabase,
   ThreadRepository,
   BranchRepository,
@@ -9,8 +10,13 @@ import {
   SourceItemRepository,
   MergeEventRepository,
   FeedEventRepository,
+  WorkingStateRepository,
 } from '@trace/core';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from '../src/server.js';
+import type { BrowserCaptureCoordinator } from '../src/browser-capture.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +31,15 @@ let commitRepo: CommitRepository;
 let sourceItemRepo: SourceItemRepository;
 let mergeEventRepo: MergeEventRepository;
 let feedEventRepo: FeedEventRepository;
+let captureNext: ReturnType<typeof vi.fn>;
+let captureStatus: ReturnType<typeof vi.fn>;
+let captureComplete: ReturnType<typeof vi.fn>;
+let captureSkip: ReturnType<typeof vi.fn>;
+let captureHealth: ReturnType<typeof vi.fn>;
+let captureAgent: ReturnType<typeof vi.fn>;
+let capturePolicy: ReturnType<typeof vi.fn>;
+let captureVisit: ReturnType<typeof vi.fn>;
+let tempDirectories: string[];
 
 // Shared seed IDs (populated in beforeEach)
 let threadOpenId: string;
@@ -33,7 +48,6 @@ let branchAId: string;
 let branchBId: string;
 let commitA1Id: string;
 let commitA2Id: string;
-let commitB1Id: string;
 let itemUnprocessedId: string;
 let itemAssignedId: string;
 let feedEventId: string;
@@ -72,7 +86,7 @@ async function seed() {
     reasoning: 'Second reasoning',
     source_item_ids: [],
   });
-  const commitB1 = commitRepo.create({
+  commitRepo.create({
     branch_id: branchBId,
     verdict_summary: 'Branch B verdict',
     reasoning: 'Branch B reasoning',
@@ -80,7 +94,6 @@ async function seed() {
   });
   commitA1Id = commitA1.id;
   commitA2Id = commitA2.id;
-  commitB1Id = commitB1.id;
 
   // Source items
   const itemUnprocessed = sourceItemRepo.create({
@@ -129,7 +142,26 @@ beforeEach(async () => {
   mergeEventRepo = new MergeEventRepository(db);
   feedEventRepo = new FeedEventRepository(db);
 
-  app = await createServer({ _db: db });
+  captureNext = vi.fn();
+  captureStatus = vi.fn();
+  captureComplete = vi.fn();
+  captureSkip = vi.fn();
+  captureHealth = vi.fn().mockReturnValue({ enabled: true, authorized: true, connected: true, lastHeartbeatAt: null, lastAttemptAt: null, lastResult: null, lastReason: null, agents: [] });
+  captureAgent = vi.fn();
+  capturePolicy = vi.fn();
+  captureVisit = vi.fn();
+  tempDirectories = [];
+  const captures = {
+    next: captureNext,
+    reportAgentStatus: captureStatus,
+    reportAgent: captureAgent,
+    setPolicyEnabled: capturePolicy,
+    considerExtensionVisit: captureVisit,
+    complete: captureComplete,
+    skip: captureSkip,
+    health: captureHealth,
+  } as unknown as BrowserCaptureCoordinator;
+  app = await createServer({ _db: db, _captures: captures, _captureToken: 'capture-test-token' });
   await app.ready();
 
   await seed();
@@ -137,6 +169,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  for (const directory of tempDirectories) rmSync(directory, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -150,6 +183,110 @@ describe('GET /api/health', () => {
     const body = JSON.parse(res.body);
     expect(body.status).toBe('ok');
     expect(typeof body.uptime).toBe('number');
+  });
+
+  it('allows localhost CORS and omits CORS headers for other origins', async () => {
+    const local = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { origin: 'http://127.0.0.1:5173' },
+    });
+    expect(local.headers['access-control-allow-origin']).toBe('http://127.0.0.1:5173');
+
+    const remote = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { origin: 'https://example.com' },
+    });
+    expect(remote.statusCode).toBe(200);
+    expect(remote.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('Browser capture bridge', () => {
+  const headers = { 'x-trace-capture-token': 'capture-test-token' };
+
+  it('requires the private launch token', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/browser-capture/next' });
+    expect(response.statusCode).toBe(401);
+    expect(captureNext).not.toHaveBeenCalled();
+  });
+
+  it('reports permission status and leases the next request', async () => {
+    const status = await app.inject({
+      method: 'POST', url: '/api/browser-capture/status', headers,
+      payload: { enabled: true, authorized: true },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(captureStatus).toHaveBeenCalledWith(true, true);
+
+    captureNext.mockReturnValue({ id: 'capture-1', sourceItemId: 'item-1' });
+    const next = await app.inject({ method: 'POST', url: '/api/browser-capture/next', headers });
+    expect(next.statusCode).toBe(200);
+    expect(next.headers['cache-control']).toBe('no-store');
+    expect(JSON.parse(next.body).id).toBe('capture-1');
+  });
+
+  it('accepts immediate Chrome visits and updates extension health', async () => {
+    captureVisit.mockReturnValue({ status: 'capture', request: { id: 'capture-extension', sourceItemId: 'source-extension', url: 'https://example.com/research', title: 'Research', availableAt: new Date().toISOString() } });
+    const status = await app.inject({
+      method: 'POST', url: '/api/browser-capture/status', headers,
+      payload: { agent: 'chrome_extension', authorized: true },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(captureAgent).toHaveBeenCalledWith('chrome_extension', true);
+
+    const visit = await app.inject({
+      method: 'POST', url: '/api/browser-extension/visit', headers,
+      payload: { url: 'https://example.com/research', title: 'Research', capturedAt: new Date().toISOString(), pageText: 'Compare A and B' },
+    });
+    expect(visit.statusCode).toBe(200);
+    expect(JSON.parse(visit.body).request.id).toBe('capture-extension');
+    expect(captureVisit).toHaveBeenCalledOnce();
+  });
+
+  it('persists capture policy through the private bridge', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/browser-capture/policy', headers, payload: { enabled: false } });
+    expect(response.statusCode).toBe(200);
+    expect(capturePolicy).toHaveBeenCalledWith(false);
+  });
+
+  it('accepts capture payloads larger than Fastify\'s default one-megabyte limit', async () => {
+    captureComplete.mockReturnValue(true);
+    const response = await app.inject({
+      method: 'POST', url: '/api/browser-capture/capture-1/complete', headers,
+      payload: {
+        fullImageBase64: 'a'.repeat(1_100_000), thumbnailBase64: '/9j/', ocrText: '',
+        width: 1200, height: 800, visualHash: '0123456789abcdef',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(captureComplete).toHaveBeenCalledOnce();
+  });
+
+  it('serves capture images by source ID without exposing file paths', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'trace-server-capture-'));
+    tempDirectories.push(directory);
+    const fullPath = join(directory, 'full.jpg');
+    const thumbnailPath = join(directory, 'thumb.jpg');
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    writeFileSync(fullPath, jpeg);
+    writeFileSync(thumbnailPath, jpeg);
+    new CaptureAssetRepository(db).create({
+      source_item_id: itemUnprocessedId, full_path: fullPath, thumbnail_path: thumbnailPath,
+      mime_type: 'image/jpeg', byte_size: jpeg.length, width: 100, height: 80,
+      visual_hash: '0123456789abcdef', captured_at: new Date().toISOString(),
+      full_expires_at: '9999-12-31T23:59:59.999Z',
+    });
+
+    const image = await app.inject({ method: 'GET', url: `/api/source-items/${itemUnprocessedId}/capture/thumbnail` });
+    expect(image.statusCode).toBe(200);
+    expect(image.headers['content-type']).toContain('image/jpeg');
+    expect(image.headers['cache-control']).toBe('private, no-store');
+    const captureItems = JSON.parse((await app.inject({ method: 'GET', url: '/api/capture' })).body).items;
+    const capture = captureItems.find((item: { id: string }) => item.id === itemUnprocessedId).capture;
+    expect(capture.thumbnailUrl).toBe(`/api/source-items/${itemUnprocessedId}/capture/thumbnail`);
+    expect(JSON.stringify(capture)).not.toContain(directory);
   });
 });
 
@@ -194,6 +331,36 @@ describe('GET /api/feed', () => {
     const body = JSON.parse(res.body);
     expect(body.events).toHaveLength(1);
     expect(body.total).toBe(2);
+  });
+
+  it('groups nearby in-progress checkpoints and marks the group read together', async () => {
+    const first = commitRepo.create({ branch_id: branchAId, verdict_summary: 'First checkpoint', reasoning: 'One', source_item_ids: [], kind: 'checkpoint', resolution_status: 'in_progress' });
+    const second = commitRepo.create({ branch_id: branchAId, verdict_summary: 'Second checkpoint', reasoning: 'Two', source_item_ids: [], kind: 'checkpoint', resolution_status: 'in_progress' });
+    feedEventRepo.create({ type: 'commit_closed', thread_id: threadOpenId, payload: { commitId: first.id, verdict: first.verdict_summary, resolutionStatus: 'in_progress' } });
+    feedEventRepo.create({ type: 'commit_closed', thread_id: threadOpenId, payload: { commitId: second.id, verdict: second.verdict_summary, resolutionStatus: 'in_progress' } });
+
+    const body = JSON.parse((await app.inject({ method: 'GET', url: '/api/feed' })).body);
+    const group = body.events.find((event: { threadId: string; type: string }) => event.threadId === threadOpenId && event.type === 'commit_closed');
+    expect(group.updateCount).toBe(2);
+    expect(group.eventIds).toHaveLength(2);
+    expect(group.resolutionStatus).toBe('in_progress');
+
+    const marked = await app.inject({ method: 'PATCH', url: '/api/feed/read', payload: { eventIds: group.eventIds } });
+    expect(marked.statusCode).toBe(200);
+    expect(JSON.parse(marked.body).updated).toBe(2);
+  });
+
+  it('groups same-branch checkpoints even when another thread is interleaved', async () => {
+    const first = commitRepo.create({ branch_id: branchAId, verdict_summary: 'First checkpoint', reasoning: 'One', source_item_ids: [], kind: 'checkpoint', resolution_status: 'in_progress' });
+    feedEventRepo.create({ type: 'commit_closed', thread_id: threadOpenId, payload: { commitId: first.id, verdict: first.verdict_summary, resolutionStatus: 'in_progress' } });
+    feedEventRepo.create({ type: 'nudge', thread_id: threadClosedId, payload: { message: 'Interleaved update' } });
+    const second = commitRepo.create({ branch_id: branchAId, verdict_summary: 'Second checkpoint', reasoning: 'Two', source_item_ids: [], kind: 'checkpoint', resolution_status: 'in_progress' });
+    feedEventRepo.create({ type: 'commit_closed', thread_id: threadOpenId, payload: { commitId: second.id, verdict: second.verdict_summary, resolutionStatus: 'in_progress' } });
+
+    const body = JSON.parse((await app.inject({ method: 'GET', url: '/api/feed' })).body);
+    const groups = body.events.filter((event: { threadId: string; type: string }) => event.threadId === threadOpenId && event.type === 'commit_closed');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].updateCount).toBe(2);
   });
 });
 
@@ -249,7 +416,8 @@ describe('GET /api/threads', () => {
     db.prepare('DELETE FROM threads').run();
     const old = threadRepo.create({ title: 'Old Thread', tags: [], status: 'open' });
     // Force older timestamp
-    db.prepare('UPDATE threads SET created_at = ? WHERE id = ?').run(
+    db.prepare('UPDATE threads SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2020-01-01T00:00:00.000Z',
       '2020-01-01T00:00:00.000Z',
       old.id,
     );
@@ -262,6 +430,44 @@ describe('GET /api/threads', () => {
     const body = JSON.parse(res.body);
     expect(body.threads[0].title).toBe('Old Thread');
     expect(body.threads[1].title).toBe('New Thread');
+  });
+
+  it('uses evidence capture time for Last Activity and recent sorting', async () => {
+    db.prepare('DELETE FROM threads').run();
+    const freshEvidence = threadRepo.create({ title: 'Fresh Evidence', tags: [], status: 'open' });
+    db.prepare('UPDATE threads SET created_at = ?, updated_at = ? WHERE id = ?').run(
+      '2020-01-01T00:00:00.000Z',
+      '2020-01-01T00:00:00.000Z',
+      freshEvidence.id,
+    );
+    sourceItemRepo.create({
+      type: 'browser_history',
+      raw_text: 'Fresh research',
+      extracted_entities: null,
+      url: null,
+      captured_at: '2026-02-01T00:00:00.000Z',
+      thread_id: freshEvidence.id,
+    });
+
+    const oldEvidence = threadRepo.create({ title: 'Old Evidence', tags: [], status: 'open' });
+    sourceItemRepo.create({
+      type: 'browser_history',
+      raw_text: 'Old research',
+      extracted_entities: null,
+      url: null,
+      captured_at: '2021-02-01T00:00:00.000Z',
+      thread_id: oldEvidence.id,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/threads?sort=recent' });
+    const body = JSON.parse(res.body);
+
+    expect(body.threads.map((thread: { title: string }) => thread.title)).toEqual([
+      'Fresh Evidence',
+      'Old Evidence',
+    ]);
+    expect(body.threads[0].lastActivity).toBe('2026-02-01T00:00:00.000Z');
+    expect(body.threads[1].lastActivity).toBe('2021-02-01T00:00:00.000Z');
   });
 });
 
@@ -281,11 +487,52 @@ describe('GET /api/threads/:id', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body.thread.id).toBe(threadOpenId);
-    expect(body.thread.title).toBe('Open Thread');
+    expect(body.id).toBe(threadOpenId);
+    expect(body.title).toBe('Open Thread');
     expect(body.branches).toHaveLength(1);
     expect(body.branches[0].id).toBe(branchAId);
-    expect(body.commits).toHaveLength(2);
+    expect(body.branches[0].commits).toHaveLength(2);
+    expect(body.story.nodes).toHaveLength(2);
+    expect(body.currentAnswer.text).toBe('Second verdict');
+    expect(body.resume).toBeDefined();
+    expect(body.comparison).toEqual({ options: [], criteria: [], cells: [] });
+  });
+
+  it('returns source-backed comparisons and preserves a user correction', async () => {
+    const now = new Date().toISOString();
+    sourceItemRepo.assignToThread(itemAssignedId, threadOpenId, branchAId, 1);
+    new WorkingStateRepository(db).upsert({
+      branch_id: branchAId, research_question: 'Plus or SeedVR2?', summary: 'Comparing batch output.',
+      options: ['Plus', 'SeedVR2'], constraints: ['Quality'], open_questions: ['What is the credit cost?'],
+      tentative_direction: 'Use Plus by default.', evidence_ids: [itemAssignedId], changed_factors: [], status: 'active',
+      last_event_at: now, checkpoint_due_at: now,
+      comparison: {
+        options: [{ id: 'plus', label: 'Plus' }, { id: 'seedvr2', label: 'SeedVR2' }],
+        criteria: [{ id: 'quality', label: 'Quality' }],
+        cells: [{ option_id: 'plus', criterion_id: 'quality', value: 'Strong', status: 'supported', source_item_ids: [itemAssignedId] }],
+      },
+    });
+    const correction = await app.inject({ method: 'PATCH', url: `/api/branches/${branchAId}/comparison-overrides/plus/quality`, payload: { value: 'Needs testing', status: 'assumption', pinned: true } });
+    expect(correction.statusCode).toBe(200);
+    const body = JSON.parse((await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}` })).body);
+    expect(body.currentAnswer.status).toBe('working');
+    expect(body.resume.nextQuestion).toBe('What is the credit cost?');
+    expect(body.comparison.cells[0]).toMatchObject({ value: 'Needs testing', status: 'assumption', corrected: true, pinned: true });
+    expect(body.story.nodes.some((node: { kind: string }) => node.kind === 'working')).toBe(true);
+  });
+});
+
+describe('Research retrieval and export', () => {
+  it('searches verdicts and exports the chronological decision history', async () => {
+    const search = await app.inject({ method: 'GET', url: '/api/search?q=Second%20verdict' });
+    expect(search.statusCode).toBe(200);
+    expect(JSON.parse(search.body).results[0]).toMatchObject({ threadId: threadOpenId, matchType: 'verdict' });
+    const exported = await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}/export?format=adr` });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.headers['content-type']).toContain('text/markdown');
+    expect(exported.body).toContain('# ADR: Open Thread');
+    expect(exported.body).toContain('## Current answer');
+    expect(exported.body).toContain('Second verdict');
   });
 });
 
@@ -358,22 +605,38 @@ describe('GET /api/capture', () => {
     // Both items are unprocessed
     expect(body.items).toHaveLength(2);
 
-    // The assigned item should have a suggestedThread
+    // The assigned item should have a typed suggestion.
     const assignedItem = body.items.find(
       (i: { id: string }) => i.id === itemAssignedId,
     );
     expect(assignedItem).toBeDefined();
-    expect(assignedItem.suggestedThread).toEqual({
-      id: threadOpenId,
-      title: 'Open Thread',
+    expect(assignedItem.suggestion).toEqual({
+      threadId: threadOpenId,
+      threadTitle: 'Open Thread',
+      confidence: 0,
     });
 
-    // The unassigned item should have null suggestedThread
+    // The unassigned item should omit suggestion.
     const unassignedItem = body.items.find(
       (i: { id: string }) => i.id === itemUnprocessedId,
     );
     expect(unassignedItem).toBeDefined();
-    expect(unassignedItem.suggestedThread).toBeNull();
+    expect(unassignedItem.suggestion).toBeUndefined();
+  });
+
+  it('returns the newest evidence first', async () => {
+    db.prepare('UPDATE source_items SET captured_at = ? WHERE id = ?')
+      .run('2026-08-03T10:00:00.000Z', itemUnprocessedId);
+    db.prepare('UPDATE source_items SET captured_at = ? WHERE id = ?')
+      .run('2026-08-03T11:00:00.000Z', itemAssignedId);
+
+    const res = await app.inject({ method: 'GET', url: '/api/capture' });
+    const body = JSON.parse(res.body);
+
+    expect(body.items.map((item: { id: string }) => item.id)).toEqual([
+      itemAssignedId,
+      itemUnprocessedId,
+    ]);
   });
 
   it('respects limit parameter', async () => {
@@ -441,6 +704,35 @@ describe('POST /api/corrections/confirm', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/corrections/confirm',
+      payload: { itemId: 'nonexistent' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /api/corrections/ignore', () => {
+  it('marks item processed without creating or assigning a thread', async () => {
+    const threadCountBefore = threadRepo.list().length;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/corrections/ignore',
+      payload: { itemId: itemUnprocessedId },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).success).toBe(true);
+    expect(sourceItemRepo.getById(itemUnprocessedId)).toMatchObject({
+      processed: true,
+      thread_id: null,
+      branch_id: null,
+    });
+    expect(threadRepo.list()).toHaveLength(threadCountBefore);
+  });
+
+  it('returns 404 for missing item', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/corrections/ignore',
       payload: { itemId: 'nonexistent' },
     });
     expect(res.statusCode).toBe(404);
@@ -559,6 +851,14 @@ describe('POST /api/threads/:id/merge', () => {
     const mergeEvents = mergeEventRepo.listByThread(threadOpenId);
     expect(mergeEvents).toHaveLength(1);
     expect(mergeEvents[0].resolved_rule).toBe('Take the most recent');
+    expect(threadRepo.getById(threadOpenId)?.status).toBe('closed');
+
+    const treeResponse = await app.inject({ method: 'GET', url: `/api/threads/${threadOpenId}/tree` });
+    const tree = JSON.parse(treeResponse.body);
+    expect(tree.edges).not.toContainEqual(expect.objectContaining({
+      from: body.commitId,
+      to: body.mergeEventId,
+    }));
   });
 
   it('returns 404 for missing thread', async () => {

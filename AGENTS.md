@@ -4,11 +4,11 @@
 
 **Trace** is "Git for your recurring decisions." It treats personal decisions (tech choices, vendor picks, etc.) as first-class, revisitable objects — with threads, commits, branches, merges, regret markers, and diffs — mirroring how git treats code changes.
 
-- **Runtime:** OpenClaw daemon (self-hosted, Mac background process)
-- **Model:** GPT-5.4 via OpenAI API
+- **Runtime:** Local Trace service for live automation; OpenClaw for recovery/reconciliation/digest schedules
+- **Models:** GPT-5.6 Terra (routing), GPT-5.6 Sol (checkpoints/reconciliation), text-embedding-3-small (retrieval)
 - **Storage:** SQLite (local-first)
 - **UI:** Native SwiftUI menu bar app + localhost web dashboard
-- **Agents:** Ingestion (OCR + browser history), Clustering, Synthesis, Resurfacing
+- **Agents:** Ingestion, autonomous routing, checkpoint/reconciliation, resurfacing
 - **Scope:** Single-user, desktop-only, v1
 
 See the [PRD](./prd.md) for full product requirements.

@@ -1,36 +1,103 @@
 #!/bin/bash
-# Trace — Stop everything with one command
+# Trace — fully stop the local Trace service and OpenClaw.
 
-echo "🛑 Stopping Trace..."
+set -u
 
-# 1. Stop API server
-if [ -f .trace-service.pid ]; then
-  kill $(cat .trace-service.pid) 2>/dev/null && echo "→ API server stopped" || echo "→ API server not running"
-  rm -f .trace-service.pid
-else
-  echo "→ No API server PID found (may not be running)"
-fi
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SERVICE_PID_FILE="$PROJECT_DIR/.trace-service.pid"
+MENUBAR_PID_FILE="$PROJECT_DIR/.trace-menubar.pid"
+TRACE_RUNTIME_DIR="$HOME/.trace"
+CHROME_HOST_MANIFEST="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.trace.browser_capture.json"
+CHROME_HOST_LAUNCHER="$TRACE_RUNTIME_DIR/trace-chrome-host"
 
-# 2. Stop Dashboard
-if [ -f .trace-dashboard.pid ]; then
-  kill $(cat .trace-dashboard.pid) 2>/dev/null && echo "→ Dashboard stopped" || echo "→ Dashboard not running"
-  rm -f .trace-dashboard.pid
-else
-  echo "→ No dashboard PID found (may not be running)"
-fi
+run_with_timeout() {
+  local seconds="$1"
+  shift
+  "$@" &
+  local child_pid=$!
+  for ((elapsed = 0; elapsed < seconds; elapsed++)); do
+    kill -0 "$child_pid" 2>/dev/null || { wait "$child_pid"; return $?; }
+    sleep 1
+  done
+  kill "$child_pid" 2>/dev/null || true
+  sleep 1
+  kill -9 "$child_pid" 2>/dev/null || true
+  wait "$child_pid" 2>/dev/null || true
+  return 124
+}
 
-# 3. Stop OpenClaw daemon
-if command -v openclaw &> /dev/null; then
-  echo "→ Stopping OpenClaw daemon..."
-  if openclaw daemon stop; then
-    echo "→ OpenClaw daemon stopped."
-  else
-    echo "→ openclaw daemon stop failed — trying LaunchAgent fallback..."
-    launchctl unload ~/Library/LaunchAgents/ai.openclaw.gateway.plist 2>/dev/null && \
-      echo "→ OpenClaw LaunchAgent unloaded." || \
-      echo "→ LaunchAgent not loaded (already stopped)."
+stop_openclaw_gateway_processes() {
+  local pid command
+  while read -r pid; do
+    [ -n "$pid" ] || continue
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    case "$command" in
+      *openclaw/dist/index.js*gateway*)
+        kill "$pid" 2>/dev/null || true
+        ;;
+    esac
+  done < <(pgrep -f 'openclaw/dist/index.js.*gateway' 2>/dev/null || true)
+}
+
+stop_menubar() {
+  if [ ! -f "$MENUBAR_PID_FILE" ]; then
+    echo "Trace menu-bar app is not running."
+    return
   fi
+  local pid command
+  pid="$(cat "$MENUBAR_PID_FILE")"
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  case "$command" in
+    *Trace.app/Contents/MacOS/Trace)
+      kill "$pid" 2>/dev/null || true
+      echo "Trace menu-bar app stopped."
+      ;;
+    "") echo "Trace menu-bar app was already stopped." ;;
+    *) echo "Refusing to stop PID $pid because it is not the Trace menu-bar app: $command"; return 1 ;;
+  esac
+  rm -f "$MENUBAR_PID_FILE"
+}
+
+stop_service() {
+  if [ ! -f "$SERVICE_PID_FILE" ]; then
+    echo "Trace service is not running."
+    return
+  fi
+
+  PID="$(cat "$SERVICE_PID_FILE")"
+  COMMAND="$(ps -p "$PID" -o command= 2>/dev/null || true)"
+  case "$COMMAND" in
+    *packages/service/dist/index.js*|*packages/service/src/index.ts*)
+      kill "$PID" 2>/dev/null || true
+      for _ in 1 2 3 4 5; do
+        kill -0 "$PID" 2>/dev/null || break
+        sleep 1
+      done
+      echo "Trace service stopped."
+      ;;
+    "")
+      echo "Trace service was already stopped."
+      ;;
+    *)
+      echo "Refusing to stop PID $PID because it is not a Trace service: $COMMAND"
+      return 1
+      ;;
+  esac
+  rm -f "$SERVICE_PID_FILE"
+}
+
+stop_menubar
+stop_service
+
+rm -f "$TRACE_RUNTIME_DIR/capture-token" "$TRACE_RUNTIME_DIR/capture-port" "$CHROME_HOST_LAUNCHER" "$CHROME_HOST_MANIFEST"
+echo "Trace Chrome capture bridge stopped."
+
+if command -v openclaw >/dev/null 2>&1; then
+  echo "Stopping OpenClaw..."
+  run_with_timeout 15 openclaw daemon stop || true
+  run_with_timeout 15 openclaw daemon uninstall || true
+  launchctl bootout "gui/$(id -u)/ai.openclaw.gateway" 2>/dev/null || true
+  stop_openclaw_gateway_processes
 fi
 
-echo ""
-echo "✅ Trace fully stopped."
+rm -f "$PROJECT_DIR/.trace-openclaw-owned"

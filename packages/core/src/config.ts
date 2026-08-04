@@ -6,7 +6,10 @@ export interface TraceConfig {
   screenshotDir: string;
   screenshotExtensions: string[];
   browserHistoryPollIntervalMs: number;
+  browserHistoryDebounceMs: number;
+  browserHistoryInitialLookbackHours: number;
   quietWindowHours: number;
+  checkpointQuietSeconds: number;
   synthesisMinItems: number;
   clusteringConfidenceThreshold: number;
   resurfacingDigestWindowDays: number;
@@ -14,6 +17,7 @@ export interface TraceConfig {
   openai: {
     model: string;
     visionModel: string;
+    checkpointModel: string;
   };
   db: {
     path: string;
@@ -23,15 +27,19 @@ export interface TraceConfig {
 const DEFAULTS: TraceConfig = {
   screenshotDir: '~/Desktop',
   screenshotExtensions: ['.png', '.jpg', '.jpeg'],
-  browserHistoryPollIntervalMs: 300_000,
+  browserHistoryPollIntervalMs: 120_000,
+  browserHistoryDebounceMs: 1_500,
+  browserHistoryInitialLookbackHours: 0,
   quietWindowHours: 24,
+  checkpointQuietSeconds: 25,
   synthesisMinItems: 2,
   clusteringConfidenceThreshold: 0.6,
   resurfacingDigestWindowDays: 7,
   dashboardPort: 3333,
   openai: {
-    model: 'gpt-5.4',
-    visionModel: 'gpt-5.4',
+    model: 'gpt-5.6-terra',
+    visionModel: 'gpt-5.6-terra',
+    checkpointModel: 'gpt-5.6-sol',
   },
   db: {
     path: '~/.trace/trace.sqlite',
@@ -101,7 +109,7 @@ export function loadConfig(configPath?: string): TraceConfig {
   // Project root fallback: walk up from this file's location
   // In compiled output: dist/config.js -> ../../trace.config.json
   // In source: src/config.ts -> ../../trace.config.json
-  const projectRoot = resolve(import.meta.dirname, '..', '..');
+  const projectRoot = resolve(import.meta.dirname, '..', '..', '..');
   candidates.push(join(projectRoot, 'trace.config.json'));
 
   let fileConfig: Partial<TraceConfig> | null = null;
@@ -113,6 +121,12 @@ export function loadConfig(configPath?: string): TraceConfig {
   const merged = fileConfig
     ? deepMerge(DEFAULTS as unknown as Record<string, unknown>, fileConfig as unknown as Record<string, unknown>) as unknown as TraceConfig
     : { ...DEFAULTS };
+
+  if (process.env.TRACE_DB_PATH) merged.db.path = process.env.TRACE_DB_PATH;
+  if (process.env.TRACE_PORT) merged.dashboardPort = Number(process.env.TRACE_PORT);
+  if (process.env.OPENAI_MODEL) merged.openai.model = process.env.OPENAI_MODEL;
+  if (process.env.OPENAI_VISION_MODEL) merged.openai.visionModel = process.env.OPENAI_VISION_MODEL;
+  if (process.env.OPENAI_CHECKPOINT_MODEL) merged.openai.checkpointModel = process.env.OPENAI_CHECKPOINT_MODEL;
 
   return expandPaths(merged);
 }

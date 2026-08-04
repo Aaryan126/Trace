@@ -1,215 +1,124 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Icon } from '../components/Icon';
+import { Modal } from '../components/Modal';
+import { RelativeTime } from '../components/RelativeTime';
 import { StatusBadge } from '../components/StatusBadge';
 import { ThreadGraph } from '../components/ThreadGraph';
-import { RelativeTime } from '../components/RelativeTime';
 import {
+  correctComparison,
+  exportThread,
   fetchThread,
   fetchThreadTree,
-  addRegret,
+  fetchThreads,
   mergeThread,
+  openResumePages,
+  resetComparison,
+  subscribeToTrace,
   type ThreadDetail,
   type TreeData,
-  type CommitNode,
+  type Thread,
 } from '../lib/api';
 
 export function ThreadView() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [thread, setThread] = useState<ThreadDetail | null>(null);
   const [tree, setTree] = useState<TreeData | null>(null);
+  const [decisions, setDecisions] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCommit, setSelectedCommit] = useState<CommitNode | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeRule, setMergeRule] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!id) return;
-    setLoading(true);
-    Promise.all([fetchThread(id), fetchThreadTree(id)])
-      .then(([threadData, treeData]) => {
-        setThread(threadData);
-        setTree(treeData);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load thread'))
-      .finally(() => setLoading(false));
+    try {
+      const [threadData, treeData] = await Promise.all([fetchThread(id), fetchThreadTree(id)]);
+      setThread(threadData); setTree(treeData); setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load this decision');
+    } finally { setLoading(false); }
   }, [id]);
 
-  const allCommits: CommitNode[] = thread
-    ? thread.branches.flatMap((b) => b.commits)
-    : [];
+  useEffect(() => { void reload(); return subscribeToTrace(() => void reload()); }, [reload]);
+  useEffect(() => { fetchThreads({ sort: 'recent', limit: 100 }).then((response) => setDecisions(response.threads)).catch(() => {}); }, []);
+  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(null), 5_000); return () => clearTimeout(timer); }, [notice]);
 
-  const handleSelectNode = (nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    const commit = allCommits.find((c) => c.id === nodeId);
-    setSelectedCommit(commit ?? null);
-  };
+  const commits = useMemo(() => thread?.branches.flatMap((branch) => branch.commits) ?? [], [thread]);
 
-  const handleAddRegret = async () => {
-    if (!selectedCommit) return;
-    try {
-      await addRegret(selectedCommit.id);
-      // Refresh thread
-      if (id) {
-        const [threadData, treeData] = await Promise.all([fetchThread(id), fetchThreadTree(id)]);
-        setThread(threadData);
-        setTree(treeData);
-        const updated = threadData.branches.flatMap((b) => b.commits).find((c) => c.id === selectedCommit.id);
-        setSelectedCommit(updated ?? null);
-      }
-    } catch {
-      // silent
-    }
-  };
+  async function handleMerge() {
+    if (!thread || thread.branches.length < 2 || !mergeRule.trim()) return;
+    await mergeThread(thread.id, { sourceBranchIds: thread.branches.map((branch) => branch.id), resolvedRule: mergeRule.trim() });
+    setMergeOpen(false); setMergeRule(''); await reload();
+  }
 
-  const handleMerge = async () => {
+  const handleResume = useCallback(async () => {
     if (!thread) return;
-    const branchIds = thread.branches.map((b) => b.id);
-    if (branchIds.length === 0) return;
-    try {
-      await mergeThread(thread.id, { sourceBranchIds: branchIds, resolvedRule: 'manual merge' });
-      if (id) {
-        const [threadData, treeData] = await Promise.all([fetchThread(id), fetchThreadTree(id)]);
-        setThread(threadData);
-        setTree(treeData);
-      }
-    } catch {
-      // silent
-    }
-  };
+    const result = await openResumePages(thread.resume.pages.map((page) => page.url));
+    setNotice(result.viaExtension ? `Opened ${result.opened} research page${result.opened === 1 ? '' : 's'} in Chrome.` : result.opened ? 'Opened the first page. Reload the Trace extension to reopen the full set automatically.' : 'No resumable pages are available yet.');
+  }, [thread]);
 
-  if (loading) {
-    return (
-      <div>
-        <div className="h-8 w-64 bg-[#161b22] rounded animate-pulse mb-4" />
-        <div className="h-96 bg-[#161b22] rounded-md border border-[#30363d] animate-pulse" />
-      </div>
-    );
-  }
+  const handleCorrection = useCallback(async (optionId: string, criterionId: string, value: string, status: 'supported' | 'unknown' | 'conflicting' | 'assumption') => {
+    const branchId = thread?.currentAnswer?.branchId ?? thread?.resume.branchId;
+    if (!branchId) return;
+    await correctComparison(branchId, optionId, criterionId, { value, status, pinned: true });
+    await reload();
+  }, [reload, thread]);
 
-  if (error || !thread) {
-    return (
-      <div className="rounded-md border border-[#f85149]/30 bg-[#f85149]/10 p-4">
-        <p className="text-sm text-[#f85149]">{error ?? 'Thread not found'}</p>
-      </div>
-    );
-  }
+  const handleReset = useCallback(async (optionId: string, criterionId: string) => {
+    const branchId = thread?.currentAnswer?.branchId ?? thread?.resume.branchId;
+    if (!branchId) return;
+    await resetComparison(branchId, optionId, criterionId); await reload();
+  }, [reload, thread]);
+
+  if (loading) return <div className="decision-loading"><div /><div /><div /></div>;
+  if (error || !thread || !tree) return <div className="decision-error"><Link to="/decisions">← Back to decisions</Link><p>{error ?? 'Decision not found'}</p></div>;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <h2 className="text-xl font-semibold text-[#e6edf3]">{thread.title}</h2>
+    <div className="decision-workspace">
+      <header className="decision-header">
+        <div className="decision-picker-row">
+          <label>Decision<select aria-label="Choose decision" value={thread.id} onChange={(event) => navigate(`/threads/${event.target.value}`)}>{decisions.map((decision) => <option key={decision.id} value={decision.id}>{decision.title}</option>)}</select></label>
+          <div className="decision-actions">
+            <Link to="/decisions" className="button-secondary"><Icon name="branch" className="h-4 w-4" /> All decisions</Link>
+            <button type="button" className="button-secondary" onClick={() => void exportThread(thread.id, 'markdown')}><Icon name="activity" className="h-4 w-4" /> Export</button>
+            <button type="button" className="button-secondary" onClick={() => setMergeOpen(true)} disabled={thread.branches.length < 2}><Icon name="merge" className="h-4 w-4" /> Reconcile</button>
+          </div>
+        </div>
+        <div className="decision-title-row">
+          <div>
+            <div className="decision-kicker">DECISION/{thread.id.slice(0, 7)}</div>
+            <h1>{thread.title}</h1>
+            <p>Last researched <RelativeTime date={thread.lastActivity} /> · {thread.itemCount} sources · {commits.length} checkpoints</p>
+          </div>
           <StatusBadge status={thread.status} />
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {thread.tags?.map((tag) => (
-            <span key={tag} className="mono text-xs bg-[#30363d]/50 text-[#8b949e] rounded px-1.5 py-0.5">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
+      </header>
 
-      {/* Action buttons */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={handleAddRegret}
-          disabled={!selectedCommit}
-          className="rounded-md border border-[#d29922]/30 bg-[#d29922]/10 px-3 py-1.5 text-sm text-[#d29922] hover:bg-[#d29922]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Add Regret
-        </button>
-        <button
-          onClick={handleMerge}
-          disabled={thread.branches.length === 0}
-          className="rounded-md border border-[#3fb950]/30 bg-[#3fb950]/10 px-3 py-1.5 text-sm text-[#3fb950] hover:bg-[#3fb950]/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Merge Branches
-        </button>
-      </div>
+      <ThreadGraph
+        tree={tree}
+        commits={commits}
+        workingStates={thread.workingStates}
+        rootBranchId={thread.branches[0]?.id}
+        story={thread.story}
+        currentAnswer={thread.currentAnswer}
+        comparison={thread.comparison}
+        resume={thread.resume}
+        threadTitle={thread.title}
+        onResume={handleResume}
+        onCorrectComparison={handleCorrection}
+        onResetComparison={handleReset}
+      />
 
-      {/* Graph + Detail split */}
-      <div className="flex gap-6">
-        {/* Left: Graph */}
-        <div className="flex-1 min-w-0 rounded-md border border-[#30363d] bg-[#161b22] p-4 overflow-auto">
-          {tree ? (
-            <ThreadGraph
-              tree={tree}
-              commits={allCommits}
-              selectedId={selectedNodeId}
-              onSelectNode={handleSelectNode}
-            />
-          ) : (
-            <p className="text-[#8b949e] text-sm">No tree data.</p>
-          )}
-        </div>
+      {notice && <div className="trace-toast" role="status">{notice}</div>}
 
-        {/* Right: Commit detail */}
-        <div className="w-80 flex-shrink-0">
-          {selectedCommit ? (
-            <div className="rounded-md border border-[#30363d] bg-[#161b22] p-4 sticky top-6">
-              <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Commit Detail</h3>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-[#8b949e] mb-0.5">Verdict</p>
-                  <p className="text-sm text-[#e6edf3]">{selectedCommit.verdictSummary}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#8b949e] mb-0.5">Reasoning</p>
-                  <p className="text-sm text-[#8b949e]">{selectedCommit.reasoning}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[#8b949e] mb-0.5">Date</p>
-                  <RelativeTime date={selectedCommit.createdAt} />
-                </div>
-                {selectedCommit.regret && (
-                  <div className="rounded bg-[#d29922]/15 border border-[#d29922]/30 px-2 py-1">
-                    <p className="text-xs text-[#d299922] font-medium text-[#d29922]">⚠ Regret marked</p>
-                  </div>
-                )}
-                {selectedCommit.sourceItems?.length > 0 && (
-                  <div>
-                    <p className="text-xs text-[#8b949e] mb-1.5">Source Items</p>
-                    <div className="space-y-2">
-                      {selectedCommit.sourceItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded border border-[#30363d] bg-[#0d1117] p-2"
-                        >
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-xs">
-                              {item.type === 'screenshot' ? '📷' : item.type === 'browser_history' ? '🌐' : '📝'}
-                            </span>
-                            <span className="mono text-xs text-[#8b949e]">{item.type}</span>
-                          </div>
-                          <p className="text-xs text-[#e6edf3] line-clamp-3">
-                            {item.rawText?.slice(0, 200)}{(item.rawText?.length ?? 0) > 200 ? '…' : ''}
-                          </p>
-                          {item.url && (
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-[#58a6ff] hover:underline mt-1 block"
-                            >
-                              {item.url}
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-md border border-[#30363d] bg-[#161b22] p-4 text-center">
-              <p className="text-sm text-[#8b949e]">Click a node to view commit details</p>
-            </div>
-          )}
-        </div>
-      </div>
+      <Modal open={mergeOpen} onClose={() => setMergeOpen(false)} title="Reconcile decision contexts">
+        <p className="modal-copy">Write the durable rule that explains when each context applies. Trace will preserve the original paths.</p>
+        <textarea value={mergeRule} onChange={(event) => setMergeRule(event.target.value)} rows={4} className="modal-textarea" placeholder="Use Plus by default; use SeedVR2 when batch video output matters more than free unlimited use." />
+        <div className="modal-actions"><button onClick={() => setMergeOpen(false)} className="button-secondary">Cancel</button><button onClick={() => void handleMerge()} disabled={!mergeRule.trim()} className="button-primary"><Icon name="merge" className="h-4 w-4" /> Create merge</button></div>
+      </Modal>
     </div>
   );
 }

@@ -46,7 +46,6 @@ function createThreadWithTrunk(title = 'Test thread', status: 'open' | 'closed' 
 }
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
-const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 beforeEach(() => {
   db = createInMemoryDatabase();

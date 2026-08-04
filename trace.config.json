@@ -1,15 +1,19 @@
 {
   "screenshotDir": "~/Desktop",
   "screenshotExtensions": [".png", ".jpg", ".jpeg"],
-  "browserHistoryPollIntervalMs": 300000,
+  "browserHistoryPollIntervalMs": 120000,
+  "browserHistoryDebounceMs": 1500,
+  "browserHistoryInitialLookbackHours": 0,
   "quietWindowHours": 24,
+  "checkpointQuietSeconds": 25,
   "synthesisMinItems": 2,
   "clusteringConfidenceThreshold": 0.6,
   "resurfacingDigestWindowDays": 7,
   "dashboardPort": 3333,
   "openai": {
-    "model": "gpt-5.4",
-    "visionModel": "gpt-5.4"
+    "model": "gpt-5.6-terra",
+    "visionModel": "gpt-5.6-terra",
+    "checkpointModel": "gpt-5.6-sol"
   },
   "db": {
     "path": "~/.trace/trace.sqlite"

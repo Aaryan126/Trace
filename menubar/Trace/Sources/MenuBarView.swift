@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @EnvironmentObject var feedStore: FeedStore
+    @EnvironmentObject var captureStore: BrowserCaptureStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -40,12 +41,29 @@ struct MenuBarView: View {
 
             Divider()
 
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Automatic browser screenshots", isOn: Binding(
+                    get: { captureStore.enabled },
+                    set: { captureStore.setEnabled($0) }
+                ))
+                .font(.system(size: 12))
+                Text(captureStore.status)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("Chrome captures only approved research pages. No Screen Recording permission needed.")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
             // Footer actions
             footerActions
         }
         .frame(minWidth: 260, maxWidth: 320)
         .frame(maxHeight: 300)
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Subviews
@@ -83,8 +101,8 @@ struct MenuBarView: View {
         VStack(spacing: 6) {
             ForEach(feedStore.events) { event in
                 Button(action: {
-                    if let threadId = event.thread_id {
-                        feedStore.openThread(threadId: threadId)
+                    if !event.threadId.isEmpty {
+                        feedStore.openThread(threadId: event.threadId)
                     }
                     Task { await feedStore.markRead(id: event.id) }
                 }) {

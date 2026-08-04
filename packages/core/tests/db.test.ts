@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type Database from 'better-sqlite3';
-import { createInMemoryDatabase } from '../src/db/database.js';
+import Sqlite, { type Database as DatabaseType } from 'better-sqlite3';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createDatabase, createInMemoryDatabase } from '../src/db/database.js';
 import { ThreadRepository } from '../src/db/repositories/thread-repository.js';
 import { BranchRepository } from '../src/db/repositories/branch-repository.js';
 import { CommitRepository } from '../src/db/repositories/commit-repository.js';
@@ -8,7 +11,7 @@ import { SourceItemRepository } from '../src/db/repositories/source-item-reposit
 import { MergeEventRepository } from '../src/db/repositories/merge-event-repository.js';
 import { FeedEventRepository } from '../src/db/repositories/feed-event-repository.js';
 
-let db: Database.Database;
+let db: DatabaseType;
 let threads: ThreadRepository;
 let branches: BranchRepository;
 let commits: CommitRepository;
@@ -33,12 +36,42 @@ describe('Schema creation', () => {
       .all() as { name: string }[];
     const names = tables.map((t) => t.name).sort();
     expect(names).toEqual(
-      ['branches', 'commits', 'feed_events', 'merge_events', 'metadata', 'source_items', 'threads']
+      ['automation_actions', 'branch_working_states', 'branches', 'capture_assets', 'commits', 'comparison_overrides', 'feed_events', 'merge_events', 'metadata', 'semantic_embeddings', 'source_items', 'threads']
     );
   });
 
   it('can be called multiple times (IF NOT EXISTS)', () => {
     expect(() => db.exec(`CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY)`)).not.toThrow();
+  });
+
+  it('migrates legacy source items and backfills their branch', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'trace-migration-'));
+    const path = join(directory, 'trace.sqlite');
+    const legacy = new Sqlite(path);
+    legacy.exec(`
+      CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT NOT NULL, tags TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE branches (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, parent_commit_id TEXT, context_label TEXT, created_at TEXT NOT NULL);
+      CREATE TABLE source_items (id TEXT PRIMARY KEY, type TEXT NOT NULL, raw_text TEXT, extracted_entities TEXT, url TEXT, captured_at TEXT NOT NULL, thread_id TEXT, processed INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO threads VALUES ('thread-1', 'Decision', '[]', 'open', '2026-01-01', '2026-01-01');
+      INSERT INTO branches VALUES ('branch-1', 'thread-1', NULL, NULL, '2026-01-01');
+      INSERT INTO source_items VALUES ('item-1', 'browser_history', 'Research', NULL, NULL, '2026-01-01', 'thread-1', 0);
+    `);
+    legacy.close();
+
+    const migrated = createDatabase(path);
+    const row = migrated.prepare('SELECT branch_id, clustering_confidence, automation_status FROM source_items WHERE id = ?').get('item-1') as {
+      branch_id: string;
+      clustering_confidence: number | null;
+      automation_status: string;
+    };
+    expect(row).toEqual({ branch_id: 'branch-1', clustering_confidence: null, automation_status: 'legacy_unresolved' });
+    const capture = migrated.prepare('SELECT capture_status, capture_reason FROM source_items WHERE id = ?').get('item-1');
+    expect(capture).toEqual({ capture_status: 'not_requested', capture_reason: null });
+    expect(migrated.prepare("SELECT value FROM metadata WHERE key = 'schema_version'").pluck().get()).toBe('6');
+    expect(migrated.pragma('table_info(commits)').some((column: { name: string }) => column.name === 'comparison_json')).toBe(true);
+    expect(migrated.pragma('table_info(branch_working_states)').some((column: { name: string }) => column.name === 'comparison_json')).toBe(true);
+    migrated.close();
+    rmSync(directory, { recursive: true, force: true });
   });
 });
 
@@ -215,6 +248,16 @@ describe('SourceItemRepository', () => {
     expect(unprocessed.find((i) => i.id === i2.id)).toBeDefined();
   });
 
+  it('stops automatic recovery after three processing attempts', () => {
+    const item = sourceItems.create({ type: 'screenshot', raw_text: 'Retry me', extracted_entities: null, url: null, captured_at: new Date().toISOString(), thread_id: null });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      sourceItems.markAutomationStatus(item.id, 'processing');
+      sourceItems.markAutomationStatus(item.id, 'error', 'timeout');
+    }
+    expect(sourceItems.listForAutomation()).toHaveLength(0);
+    expect(sourceItems.getById(item.id)).toMatchObject({ automation_status: 'error', automation_attempts: 3 });
+  });
+
   it('assigns to thread and marks processed', () => {
     const t = threads.create({ title: 'T', tags: [], status: 'open' });
     const item = sourceItems.create({
@@ -233,6 +276,27 @@ describe('SourceItemRepository', () => {
 
     const processed = sourceItems.markProcessed(item.id);
     expect(processed!.processed).toBe(true);
+  });
+
+  it('marks an irrelevant item processed without assigning it to a thread', () => {
+    const item = sourceItems.create({
+      type: 'browser_history',
+      raw_text: 'Generic social feed',
+      extracted_entities: null,
+      url: 'https://example.com/feed',
+      captured_at: new Date().toISOString(),
+      thread_id: null,
+    });
+
+    const ignored = sourceItems.markIgnored(item.id, 0.97);
+
+    expect(ignored).toMatchObject({
+      processed: true,
+      thread_id: null,
+      branch_id: null,
+      clustering_confidence: 0.97,
+    });
+    expect(sourceItems.listUnprocessed()).toHaveLength(0);
   });
 
   it('lists by thread', () => {
@@ -259,6 +323,20 @@ describe('SourceItemRepository', () => {
     });
     const fetched = sourceItems.getById(item.id);
     expect(fetched!.extracted_entities).toEqual(entities);
+  });
+
+  it('fails screenshot jobs interrupted by a service restart', () => {
+    const item = sourceItems.create({
+      type: 'browser_history', raw_text: 'Interrupted capture', extracted_entities: null,
+      url: 'https://example.com/research', captured_at: new Date().toISOString(), thread_id: null,
+    });
+    sourceItems.updateCaptureStatus(item.id, 'capturing');
+
+    expect(sourceItems.failInterruptedCaptures()).toBe(1);
+    expect(sourceItems.getById(item.id)).toMatchObject({
+      capture_status: 'failed',
+      capture_reason: 'capture_agent_offline',
+    });
   });
 });
 
@@ -363,7 +441,7 @@ describe('FeedEventRepository', () => {
 
   it('handles JSON payload round-trip', () => {
     const payload = { nested: { deep: true }, arr: [1, 'two', 3] };
-    const e = feedEvents.create({ type: 'digest', thread_id: null, payload });
+    feedEvents.create({ type: 'digest', thread_id: null, payload });
     const fetched = feedEvents.list({ limit: 1, offset: 0 });
     expect(fetched[0].payload).toEqual(payload);
   });
@@ -383,7 +461,7 @@ describe('Status transitions', () => {
 
   it('rejects invalid status values', () => {
     const t = threads.create({ title: 'T', tags: [], status: 'open' });
-    expect(() => threads.updateStatus(t.id, 'invalid' as any)).toThrow();
+    expect(() => threads.updateStatus(t.id, 'invalid' as unknown as 'open')).toThrow();
   });
 });
 

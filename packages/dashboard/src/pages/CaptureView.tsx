@@ -1,223 +1,192 @@
-import { useEffect, useState, useCallback } from 'react';
-import { fetchCapture, postCorrection, fetchThreads, type CaptureItem, type Thread } from '../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { EmptyState } from '../components/EmptyState';
+import { CaptureThumbnail } from '../components/CaptureThumbnail';
+import { Icon } from '../components/Icon';
+import { PageHeader } from '../components/PageHeader';
 import { RelativeTime } from '../components/RelativeTime';
-import { Modal } from '../components/Modal';
+import {
+  fetchLiveTrace,
+  retryAutomation,
+  subscribeToTrace,
+  undoAutomation,
+  type LiveTraceResponse,
+} from '../lib/api';
+
+const EMPTY: LiveTraceResponse = { states: [], actions: [], sources: [], capture: null };
 
 export function CaptureView() {
-  const [items, setItems] = useState<CaptureItem[]>([]);
+  const [live, setLive] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalItem, setModalItem] = useState<CaptureItem | null>(null);
-  const [newThreadTitle, setNewThreadTitle] = useState('');
-  const [reassignItem, setReassignItem] = useState<CaptureItem | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetchCapture();
-      setItems(res.items);
+      setLive(await fetchLiveTrace());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load capture items');
+      setError(err instanceof Error ? err.message : 'Failed to load Live Trace');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    void load();
+    const unsubscribe = subscribeToTrace(() => void load());
+    const fallback = setInterval(() => void load(), 30_000);
+    return () => { unsubscribe(); clearInterval(fallback); };
   }, [load]);
 
-  useEffect(() => {
-    fetchThreads({ limit: 100 })
-      .then((res) => setThreads(res.threads))
-      .catch(() => {});
-  }, []);
-
-  const handleConfirm = async (item: CaptureItem) => {
-    try {
-      await postCorrection('confirm', { itemId: item.id, threadId: item.suggestion?.threadId });
-      await load();
-    } catch {
-      // silent
-    }
-  };
-
-  const handleReassign = async (item: CaptureItem, threadId: string) => {
-    try {
-      await postCorrection('reassign', { itemId: item.id, threadId });
-      setReassignItem(null);
-      await load();
-    } catch {
-      // silent
-    }
-  };
-
-  const handleNewThread = async () => {
-    if (!modalItem || !newThreadTitle.trim()) return;
-    try {
-      await postCorrection('new-thread', { itemId: modalItem.id, title: newThreadTitle.trim() });
-      setModalOpen(false);
-      setModalItem(null);
-      setNewThreadTitle('');
-      await load();
-    } catch {
-      // silent
-    }
-  };
-
-  const typeIcon = (type: string) => {
-    if (type === 'screenshot') return '📷';
-    if (type === 'browser_history') return '🌐';
-    return '📝';
-  };
-
-  if (loading && items.length === 0) {
-    return (
-      <div>
-        <h2 className="text-xl font-semibold text-[#e6edf3] mb-6">Capture</h2>
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 rounded-md bg-[#161b22] border border-[#30363d] animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error && items.length === 0) {
-    return (
-      <div>
-        <h2 className="text-xl font-semibold text-[#e6edf3] mb-6">Capture</h2>
-        <div className="rounded-md border border-[#f85149]/30 bg-[#f85149]/10 p-4">
-          <p className="text-sm text-[#f85149]">{error}</p>
-          <button onClick={load} className="mt-2 text-sm text-[#58a6ff] hover:underline">Retry</button>
-        </div>
-      </div>
-    );
-  }
+  const activeSources = live.sources.filter((source) => ['pending', 'processing', 'error'].includes(source.automationStatus ?? ''));
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-[#e6edf3]">Capture</h2>
-        <span className="text-xs text-[#8b949e] mono">Auto-refresh: 10s</span>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Autonomous pipeline"
+        title="Live Trace"
+        description="Trace reads new evidence, decides where it belongs, updates the working state, and creates checkpoints automatically. This page is an audit trail, not an approval queue."
+        actions={<span className="mono rounded-full border border-[#3fb950]/30 bg-[#3fb950]/10 px-3 py-1.5 text-xs text-[#3fb950]">live · localhost</span>}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-4" aria-label="Automation flow">
+        <FlowStep label="Capture" detail="browser or screenshot" active={activeSources.some((item) => item.automationStatus === 'pending')} />
+        <FlowStep label="Understand" detail="fetch + route" active={activeSources.some((item) => item.automationStatus === 'processing')} />
+        <FlowStep label="File" detail="thread and branch" active={live.actions.some((action) => action.status === 'applied')} />
+        <FlowStep label="Checkpoint" detail="after 25s quiet" active={live.states.some((state) => state.status === 'checkpointing')} />
       </div>
 
-      {items.length === 0 ? (
-        <p className="text-[#8b949e] text-sm">No captured items.</p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const lowConfidence = item.suggestion && item.suggestion.confidence < 0.5;
-            return (
-              <div
-                key={item.id}
-                className={`rounded-md border border-[#30363d] bg-[#161b22] p-4 ${
-                  lowConfidence ? 'border-l-2 border-l-[#d29922] bg-[#d29922]/5' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{typeIcon(item.type)}</span>
-                    <span className="mono text-xs text-[#8b949e]">{item.type}</span>
-                  </div>
-                  <RelativeTime date={item.capturedAt} />
-                </div>
-
-                <p className="text-sm text-[#e6edf3] mb-2">
-                  {item.rawText.slice(0, 200)}{item.rawText.length > 200 ? '…' : ''}
-                </p>
-
-                {item.url && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-[#58a6ff] hover:underline block mb-2"
-                  >
-                    {item.url}
-                  </a>
-                )}
-
-                {item.suggestion && (
-                  <p className="text-xs text-[#8b949e] mb-3">
-                    Assigned to:{' '}
-                    <span className="text-[#e6edf3]">{item.suggestion.threadTitle}</span>
-                    <span className={`mono ml-1.5 ${lowConfidence ? 'text-[#d29922]' : 'text-[#3fb950]'}`}>
-                      {Math.round(item.suggestion.confidence * 100)}%
-                    </span>
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleConfirm(item)}
-                    className="rounded border border-[#3fb950]/30 bg-[#3fb950]/10 px-2.5 py-1 text-xs text-[#3fb950] hover:bg-[#3fb950]/20 transition-colors"
-                  >
-                    ✓ Confirm
-                  </button>
-                  {reassignItem?.id === item.id ? (
-                    <select
-                      onChange={(e) => handleReassign(item, e.target.value)}
-                      onBlur={() => setReassignItem(null)}
-                      autoFocus
-                      className="rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 text-xs text-[#e6edf3]"
-                    >
-                      <option value="">Select thread…</option>
-                      {threads.map((t) => (
-                        <option key={t.id} value={t.id}>{t.title}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      onClick={() => setReassignItem(item)}
-                      className="rounded border border-[#58a6ff]/30 bg-[#58a6ff]/10 px-2.5 py-1 text-xs text-[#58a6ff] hover:bg-[#58a6ff]/20 transition-colors"
-                    >
-                      Reassign
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { setModalItem(item); setModalOpen(true); }}
-                    className="rounded border border-[#30363d] bg-[#0d1117] px-2.5 py-1 text-xs text-[#8b949e] hover:text-[#e6edf3] hover:border-[#8b949e] transition-colors"
-                  >
-                    + New Thread
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {live.capture && (
+        <section className="panel-soft flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Browser capture health">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${live.capture.connected && live.capture.enabled && live.capture.authorized ? 'bg-[#3fb950]' : 'bg-[#d29922]'}`} />
+              <h2 className="text-sm font-semibold text-[#e6edf3]">Automatic browser screenshots</h2>
+            </div>
+            <p className="mt-1 text-xs text-[#8b949e]">
+              {captureHealthLabel(live.capture.enabled, live.capture.authorized, live.capture.connected)}
+            </p>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="mono text-[10px] uppercase tracking-wider text-[#6e7681]">last result</p>
+            <p className={`mt-1 text-xs ${live.capture.lastResult === 'failed' ? 'text-[#f85149]' : 'text-[#c9d1d9]'}`}>
+              {live.capture.lastResult ? `${live.capture.lastResult}${live.capture.lastReason ? ` · ${humanCaptureReason(live.capture.lastReason)}` : ''}` : 'No attempt yet'}
+            </p>
+          </div>
+        </section>
       )}
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setModalItem(null); }} title="Create New Thread">
-        <input
-          type="text"
-          value={newThreadTitle}
-          onChange={(e) => setNewThreadTitle(e.target.value)}
-          placeholder="Thread title…"
-          className="w-full rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-2 text-sm text-[#e6edf3] placeholder-[#8b949e] focus:border-[#58a6ff] focus:outline-none mb-4"
-          autoFocus
-        />
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={() => { setModalOpen(false); setModalItem(null); }}
-            className="rounded-md border border-[#30363d] bg-[#0d1117] px-3 py-1.5 text-sm text-[#8b949e] hover:text-[#e6edf3] transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleNewThread}
-            disabled={!newThreadTitle.trim()}
-            className="rounded-md border border-[#3fb950]/30 bg-[#3fb950]/15 px-3 py-1.5 text-sm text-[#3fb950] hover:bg-[#3fb950]/25 disabled:opacity-40 transition-colors"
-          >
-            Create
-          </button>
+      {error && <div className="rounded-lg border border-[#f85149]/30 bg-[#f85149]/10 p-4 text-sm text-[#f85149]">{error}</div>}
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-[#e6edf3]">Working research</h2>
+            <p className="mt-1 text-sm text-[#8b949e]">Live, pre-commit state. The newest update is always first.</p>
+          </div>
+          <span className="mono text-xs text-[#6e7681]">{live.states.length} active</span>
         </div>
-      </Modal>
+        {loading && live.states.length === 0 ? (
+          <div className="h-40 animate-pulse rounded-xl border border-[#30363d] bg-[#161b22]" />
+        ) : live.states.length === 0 ? (
+          <EmptyState icon="activity" title="Waiting for focused research" description="Visit a comparison, evaluation, or decision-relevant page. Casual browsing will be ignored automatically." />
+        ) : live.states.map((state) => (
+          <article key={state.id} className="panel p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link to={`/threads/${state.threadId}`} className="font-semibold text-[#58a6ff] hover:underline">{state.threadTitle}</Link>
+                  <span className="mono rounded border border-[#30363d] px-1.5 py-0.5 text-[10px] text-[#8b949e]">branch/{state.branchId.slice(0, 7)}</span>
+                  <RelativeTime date={state.lastEventAt} />
+                </div>
+                <p className="mt-3 text-sm font-medium text-[#e6edf3]">{state.researchQuestion}</p>
+                <p className="mt-2 max-w-4xl text-sm leading-6 text-[#8b949e]">{state.summary}</p>
+              </div>
+              <span className={`rounded-full border px-2.5 py-1 text-xs ${state.status === 'error' ? 'border-[#f85149]/30 text-[#f85149]' : state.status === 'checkpointing' ? 'border-[#d29922]/30 text-[#d29922]' : 'border-[#3fb950]/30 text-[#3fb950]'}`}>{state.status}</span>
+            </div>
+            <div className="mt-4 grid gap-3 border-t border-[#21262d] pt-4 md:grid-cols-3">
+              <StateList label="Options" values={state.options} />
+              <StateList label="Constraints" values={state.constraints} />
+              <StateList label="Open questions" values={state.openQuestions} />
+            </div>
+            {state.tentativeDirection && <p className="mt-4 rounded-lg border border-[#58a6ff]/20 bg-[#58a6ff]/5 px-3 py-2 text-xs text-[#c9d1d9]"><span className="font-semibold text-[#58a6ff]">Tentative direction:</span> {state.tentativeDirection}</p>}
+            {(state.evidence ?? []).some((source) => source.capture) && (
+              <div className="mt-4 flex flex-wrap gap-3 border-t border-[#21262d] pt-4">
+                {(state.evidence ?? []).filter((source) => source.capture).map((source) => <CaptureThumbnail key={source.id} source={source} compact />)}
+              </div>
+            )}
+          </article>
+        ))}
+      </section>
+
+      {activeSources.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold text-[#e6edf3]">In flight</h2>
+          {activeSources.map((source) => (
+            <div key={source.id} className="panel-soft flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${source.automationStatus === 'error' ? 'bg-[#f85149]' : 'animate-pulse bg-[#d29922]'}`} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-[#c9d1d9]">{source.rawText || source.url || 'New evidence'}</p>
+                <p className="mono mt-1 text-[10px] uppercase tracking-wider text-[#6e7681]">{source.automationStatus}</p>
+                {source.captureStatus && source.captureStatus !== 'not_requested' && (
+                  <p className="mt-1 text-[10px] text-[#6e7681]">capture: {source.captureStatus}{source.captureReason ? ` · ${humanCaptureReason(source.captureReason)}` : ''}</p>
+                )}
+              </div>
+              <CaptureThumbnail source={source} compact />
+              {source.automationStatus === 'error' && <button onClick={() => void retryAutomation(source.id).then(load)} className="button-secondary">Retry</button>}
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-[#e6edf3]">Automation log</h2>
+          <p className="mt-1 text-sm text-[#8b949e]">Why Trace filed, branched, ignored, or checkpointed each item.</p>
+        </div>
+        {live.actions.length === 0 ? <EmptyState icon="commit" title="No automatic actions yet" description="Actions appear here as soon as new evidence is routed." /> : live.actions.map((action) => (
+          <article key={action.id} className="panel-soft flex flex-col gap-3 p-4 md:flex-row md:items-start">
+            <span className="mono rounded border border-[#30363d] bg-[#0d1117] px-2 py-1 text-[10px] uppercase text-[#58a6ff]">{action.action.replace('_', ' ')}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {action.threadId ? <Link to={`/threads/${action.threadId}`} className="text-sm font-medium text-[#e6edf3] hover:text-[#58a6ff]">{action.threadTitle}</Link> : <span className="text-sm font-medium text-[#8b949e]">Not added to research history</span>}
+                <RelativeTime date={action.createdAt} />
+                {action.confidence !== undefined && <span className="mono text-[10px] text-[#6e7681]">{Math.round(action.confidence * 100)}% confidence</span>}
+              </div>
+              <p className="mt-1.5 text-xs leading-5 text-[#8b949e]">{action.rationale}</p>
+            </div>
+            {action.undoable && action.status === 'applied' && <button onClick={() => void undoAutomation(action.id).then(load)} className="rounded-md px-3 py-1.5 text-xs text-[#8b949e] hover:bg-[#21262d] hover:text-[#e6edf3]">Undo</button>}
+          </article>
+        ))}
+      </section>
     </div>
   );
+}
+
+function FlowStep({ label, detail, active }: { label: string; detail: string; active: boolean }) {
+  return <div className={`rounded-lg border p-3 ${active ? 'border-[#58a6ff]/40 bg-[#58a6ff]/5' : 'border-[#30363d] bg-[#11161d]'}`}><div className="flex items-center gap-2"><Icon name="check" className={`h-3.5 w-3.5 ${active ? 'text-[#58a6ff]' : 'text-[#3fb950]'}`} /><span className="text-xs font-semibold text-[#e6edf3]">{label}</span></div><p className="mt-1 pl-5.5 text-[11px] text-[#6e7681]">{detail}</p></div>;
+}
+
+function StateList({ label, values }: { label: string; values: string[] }) {
+  return <div><p className="mono text-[10px] uppercase tracking-wider text-[#6e7681]">{label}</p>{values.length ? <ul className="mt-2 space-y-1 text-xs leading-5 text-[#c9d1d9]">{values.map((value) => <li key={value}>• {value}</li>)}</ul> : <p className="mt-2 text-xs text-[#484f58]">None yet</p>}</div>;
+}
+
+function captureHealthLabel(enabled: boolean, authorized: boolean, connected: boolean): string {
+  if (!enabled) return 'Paused in the Trace menu; history-only routing remains active.';
+  if (!connected) return 'Load the Trace Chrome extension once; history-only routing remains active.';
+  if (!authorized) return 'Chrome page access is not authorized.';
+  return 'Chrome extension connected. Approved research pages are captured automatically.';
+}
+
+function humanCaptureReason(reason: string): string {
+  const labels: Record<string, string> = {
+    capture_disabled: 'disabled', permission_required: 'permission required', capture_agent_offline: 'capture extension offline',
+    sensitive_url: 'sensitive page excluded', rate_limited: 'rate limit', url_cooldown: 'URL cooldown',
+    unsupported_system: 'unsupported macOS version', browser_not_frontmost: 'browser not frontmost',
+    private_window: 'private window excluded', no_matching_window: 'active tab changed',
+    capture_failed: 'browser capture failed', encoding_failed: 'image encoding failed',
+    upload_failed: 'localhost upload failed', invalid_payload: 'invalid image payload',
+    capture_timeout: 'capture timed out', near_duplicate: 'full duplicate omitted',
+  };
+  return labels[reason] ?? reason.replaceAll('_', ' ');
 }

@@ -25,7 +25,7 @@ struct FeedCardView: View {
                     Spacer()
 
                     // Relative time
-                    Text(RelativeTimeFormatter.format(from: event.created_at))
+                    Text(RelativeTimeFormatter.format(from: event.createdAt))
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }

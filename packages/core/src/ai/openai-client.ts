@@ -6,6 +6,7 @@ export interface OpenAIConfig {
   apiKey: string;
   model?: string;
   visionModel?: string;
+  checkpointModel?: string;
 }
 
 // ─── Response types ───────────────────────────────────────────────────────────
@@ -18,10 +19,12 @@ export interface ScreenshotExtraction {
 }
 
 export interface ClusterDecision {
-  decision: 'existing' | 'new';
+  decision: 'existing' | 'new' | 'ignore';
   threadId: string | null;
   confidence: number;
   suggestedTitle?: string;
+  contextLabel?: string;
+  reason?: string;
 }
 
 export interface CommitSynthesis {
@@ -34,6 +37,43 @@ export interface DiffResult {
   changedFactors: string[];
 }
 
+export interface AutonomousRouteDecision {
+  action: 'ignore' | 'new_thread' | 'continue_branch' | 'new_branch';
+  threadId: string | null;
+  branchId: string | null;
+  confidence: number;
+  rationale: string;
+  title: string | null;
+  contextLabel: string | null;
+  researchQuestion: string;
+  summary: string;
+  options: string[];
+  constraints: string[];
+  openQuestions: string[];
+  tentativeDirection: string | null;
+  changedFactors: string[];
+  checkpointNow: boolean;
+  comparisonUpdates?: Array<{
+    option: string;
+    criterion: string;
+    value: string;
+    status: 'supported' | 'unknown' | 'conflicting' | 'assumption';
+  }>;
+}
+
+export interface CheckpointSynthesis extends CommitSynthesis {
+  resolutionStatus: 'in_progress' | 'resolved';
+}
+
+export interface ReconciliationDecision {
+  action: 'none' | 'merge';
+  confidence: number;
+  rationale: string;
+  sourceBranchIds: string[];
+  targetBranchId: string | null;
+  durableRule: string | null;
+}
+
 // ─── System prompts ───────────────────────────────────────────────────────────
 
 const PROMPTS = {
@@ -41,20 +81,30 @@ const PROMPTS = {
     'You are analyzing a screenshot. Extract: all readable text, named entities (technologies, products, people, companies), any visible URL, and the source application (inferred from UI chrome). Return JSON with keys: text, entities, url, appSource.',
 
   clusterItem:
-    'You are a decision-tracking system. Given a research item and existing decision threads, determine if this item belongs to an existing thread or starts a new one. Consider semantic similarity, not just keyword matching. Return JSON with keys: decision ("existing"|"new"), threadId (string|null), confidence (0-1 number), suggestedTitle (string, only when decision is "new").',
+    'You curate research for a decision-tracking system, not a browser-history archive. First decide whether the item contains evidence of an actual choice, comparison, evaluation, constraint, or revisited verdict. Generic homepages, feeds, inboxes, messages, entertainment, news consumed without a decision, account pages, and casual browsing must be ignored. If relevant, decide whether it belongs to an existing decision thread or starts a new decision. A new thread title must describe the decision being made, not merely repeat the page title. Consider semantic similarity, not just keywords. When selecting a closed thread, provide a short contextLabel describing why the decision is being revisited. Return JSON with keys: decision ("existing"|"new"|"ignore"), threadId (string|null), confidence (0-1 number), reason (short string), suggestedTitle (only when decision is "new"), contextLabel (only when reopening a closed thread).',
 
   synthesizeCommit:
     'You are synthesizing a decision. Given research items from a decision thread, write a clear verdict (what was decided) and reasoning (why). Be concise and actionable. The verdict should be a single sentence a developer can act on. Return JSON with keys: verdict, reasoning.',
 
   generateDiff:
     'You are comparing contexts. Given new research context and a prior decision commit, identify what has changed that might make the prior decision worth revisiting. Focus on changed constraints, new options, or invalidated assumptions. Return JSON with keys: summary, changedFactors (string array).',
+
+  autonomousRoute:
+    'You are the autonomous routing brain for Trace, a local Git-like research history. Ignore casual browsing and pages with no evidence of a choice, comparison, evaluation, constraint, or revisited conclusion. For relevant evidence: continue the current branch when it advances the same research context; create a new branch only when a material constraint, audience, timeframe, or goal creates a genuinely different decision context; create a new thread only for a different research question. Update a concise live working state using only evidence supplied. Extract comparisonUpdates only for explicit option-by-criterion claims in the supplied evidence; use unknown rather than guessing, assumption only when the page itself frames a claim as an assumption, and conflicting when the new evidence conflicts with the supplied comparison. Never invent IDs. Use null when no supplied ID applies.',
+
+  checkpoint:
+    'Create a durable research checkpoint from the live state and evidence. A checkpoint may remain in progress; call it resolved only when the evidence supports a clear actionable conclusion. Keep the verdict concise and the reasoning traceable to supplied evidence.',
+
+  reconcile:
+    'Decide whether multiple research branches now support one durable rule without erasing meaningful context. Merge only when conclusions are compatible and the rule states the context boundary clearly. Otherwise return none. Never invent branch IDs.',
 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const DEFAULT_MODEL = 'gpt-5.4';
+const DEFAULT_MODEL = 'gpt-5.6-terra';
+const DEFAULT_CHECKPOINT_MODEL = 'gpt-5.6-sol';
 
-function resolveConfig(config?: Partial<OpenAIConfig>): Required<Pick<OpenAIConfig, 'apiKey'>> & { model: string; visionModel: string } {
+function resolveConfig(config?: Partial<OpenAIConfig>): Required<Pick<OpenAIConfig, 'apiKey'>> & { model: string; visionModel: string; checkpointModel: string } {
   const apiKey = config?.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -65,6 +115,7 @@ function resolveConfig(config?: Partial<OpenAIConfig>): Required<Pick<OpenAIConf
     apiKey,
     model: config?.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL,
     visionModel: config?.visionModel ?? process.env.OPENAI_VISION_MODEL ?? DEFAULT_MODEL,
+    checkpointModel: config?.checkpointModel ?? process.env.OPENAI_CHECKPOINT_MODEL ?? DEFAULT_CHECKPOINT_MODEL,
   };
 }
 
@@ -105,15 +156,17 @@ export class TraceAI {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly visionModel: string;
+  private readonly checkpointModel: string;
 
   constructor(config?: Partial<OpenAIConfig>) {
     const resolved = resolveConfig(config);
-    this.client = new OpenAI({ apiKey: resolved.apiKey });
+    this.client = new OpenAI({ apiKey: resolved.apiKey, timeout: 15_000, maxRetries: 0 });
     this.model = resolved.model;
     this.visionModel = resolved.visionModel;
+    this.checkpointModel = resolved.checkpointModel;
   }
 
-  async extractFromScreenshot(imageBuffer: Buffer): Promise<ScreenshotExtraction> {
+  async extractFromScreenshot(imageBuffer: Buffer, mimeType = 'image/png'): Promise<ScreenshotExtraction> {
     const base64 = imageBuffer.toString('base64');
     return withRetry(async () => {
       const response = await this.client.chat.completions.create({
@@ -125,7 +178,7 @@ export class TraceAI {
             role: 'user',
             content: [
               { type: 'text', text: 'Analyze this screenshot and extract all relevant information.' },
-              { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
             ],
           },
         ],
@@ -188,7 +241,132 @@ export class TraceAI {
       return parseJSONResponse<DiffResult>(content, 'generateDiff');
     });
   }
+
+  async routeResearch(
+    item: { text: string; url: string | null; entities: string[] },
+    candidates: Array<{
+      id: string;
+      title: string;
+      status: 'open' | 'closed';
+      branches: Array<{ id: string; contextLabel: string | null; workingSummary: string; latestVerdict: string; comparison?: unknown }>;
+    }>,
+    imageDataUrl?: string,
+  ): Promise<AutonomousRouteDecision> {
+    return withRetry(async () => {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        reasoning_effort: 'low',
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'trace_route', strict: true, schema: ROUTE_SCHEMA },
+        },
+        messages: [
+          { role: 'system', content: PROMPTS.autonomousRoute },
+          { role: 'user', content: imageDataUrl ? [
+            { type: 'text', text: JSON.stringify({ item, candidates }) },
+            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+          ] : JSON.stringify({ item, candidates }) },
+        ],
+      });
+      return parseJSONResponse<AutonomousRouteDecision>(response.choices[0]?.message?.content, 'routeResearch');
+    }, 1);
+  }
+
+  async synthesizeCheckpoint(input: {
+    threadTitle: string;
+    workingState: Record<string, unknown>;
+    evidence: Array<{ text: string; url: string | null }>;
+    previousVerdicts: string[];
+  }): Promise<CheckpointSynthesis> {
+    return withRetry(async () => {
+      const response = await this.client.chat.completions.create({
+        model: this.checkpointModel,
+        reasoning_effort: 'medium',
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'trace_checkpoint', strict: true, schema: CHECKPOINT_SCHEMA },
+        },
+        messages: [
+          { role: 'system', content: PROMPTS.checkpoint },
+          { role: 'user', content: JSON.stringify(input) },
+        ],
+      });
+      return parseJSONResponse<CheckpointSynthesis>(response.choices[0]?.message?.content, 'synthesizeCheckpoint');
+    }, 1);
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const response = await withRetry(() => this.client.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text.slice(0, 20_000),
+      encoding_format: 'float',
+    }), 1);
+    return response.data[0]?.embedding ?? [];
+  }
+
+  async reconcileBranches(input: {
+    threadTitle: string;
+    branches: Array<{ id: string; contextLabel: string | null; workingSummary: string; latestVerdict: string }>;
+  }): Promise<ReconciliationDecision> {
+    return withRetry(async () => {
+      const response = await this.client.chat.completions.create({
+        model: this.checkpointModel,
+        reasoning_effort: 'medium',
+        response_format: { type: 'json_schema', json_schema: { name: 'trace_reconcile', strict: true, schema: RECONCILIATION_SCHEMA } },
+        messages: [
+          { role: 'system', content: PROMPTS.reconcile },
+          { role: 'user', content: JSON.stringify(input) },
+        ],
+      });
+      return parseJSONResponse<ReconciliationDecision>(response.choices[0]?.message?.content, 'reconcileBranches');
+    }, 1);
+  }
 }
+
+const ROUTE_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['action', 'threadId', 'branchId', 'confidence', 'rationale', 'title', 'contextLabel', 'researchQuestion', 'summary', 'options', 'constraints', 'openQuestions', 'tentativeDirection', 'changedFactors', 'checkpointNow', 'comparisonUpdates'],
+  properties: {
+    action: { type: 'string', enum: ['ignore', 'new_thread', 'continue_branch', 'new_branch'] },
+    threadId: { type: ['string', 'null'] }, branchId: { type: ['string', 'null'] },
+    confidence: { type: 'number', minimum: 0, maximum: 1 }, rationale: { type: 'string' },
+    title: { type: ['string', 'null'] }, contextLabel: { type: ['string', 'null'] },
+    researchQuestion: { type: 'string' }, summary: { type: 'string' },
+    options: { type: 'array', items: { type: 'string' } }, constraints: { type: 'array', items: { type: 'string' } },
+    openQuestions: { type: 'array', items: { type: 'string' } }, tentativeDirection: { type: ['string', 'null'] },
+    changedFactors: { type: 'array', items: { type: 'string' } }, checkpointNow: { type: 'boolean' },
+    comparisonUpdates: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['option', 'criterion', 'value', 'status'],
+        properties: {
+          option: { type: 'string' }, criterion: { type: 'string' }, value: { type: 'string' },
+          status: { type: 'string', enum: ['supported', 'unknown', 'conflicting', 'assumption'] },
+        },
+      },
+    },
+  },
+} as const;
+
+const CHECKPOINT_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['verdict', 'reasoning', 'resolutionStatus'],
+  properties: {
+    verdict: { type: 'string' }, reasoning: { type: 'string' },
+    resolutionStatus: { type: 'string', enum: ['in_progress', 'resolved'] },
+  },
+} as const;
+
+const RECONCILIATION_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['action', 'confidence', 'rationale', 'sourceBranchIds', 'targetBranchId', 'durableRule'],
+  properties: {
+    action: { type: 'string', enum: ['none', 'merge'] }, confidence: { type: 'number', minimum: 0, maximum: 1 },
+    rationale: { type: 'string' }, sourceBranchIds: { type: 'array', items: { type: 'string' } },
+    targetBranchId: { type: ['string', 'null'] }, durableRule: { type: ['string', 'null'] },
+  },
+} as const;
 
 // ─── Singleton factory ────────────────────────────────────────────────────────
 

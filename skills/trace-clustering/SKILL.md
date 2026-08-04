@@ -1,46 +1,41 @@
 ---
 name: trace-clustering
-description: Assigns new research items to decision threads, detecting new topics and reopens.
+description: Recovers pending autonomous routing work after an interruption.
 metadata:
   openclaw:
     requires:
-      env: ["OPENAI_API_KEY"]
-      bins: ["node"]
+      bins: ["pnpm"]
     os: ["darwin"]
 ---
 
-# Trace Clustering
+# Trace Routing Recovery
 
-You manage Trace's clustering agent. When new source items are ingested, this skill assigns them to the correct decision thread.
+Trace normally routes each new item inside the local service within seconds. This skill is the OpenClaw recovery path for pending or failed work after a crash or temporary API outage.
 
 ## What it does
 
-For each unprocessed source item:
-1. Compares the item against all existing threads (open + recently closed)
-2. Decides: belongs to existing thread, starts a new thread, or reopens a closed thread
-3. Items below the confidence threshold (0.6) are flagged for manual review in the Capture View
+For each fresh item with `pending` or `error` automation status:
+1. Enriches public page text safely when available
+2. Retrieves semantic and recent thread candidates
+3. Chooses ignore, new thread, continue branch, or new branch using strict structured output
+4. Updates Live Trace and records an auditable action with rationale
 
 ## When to run
 
-- Triggered automatically after ingestion captures new items
-- Can be run manually: "cluster new items", "assign research items"
-- Scheduled via cron every 30 minutes
+- The Trace service handles fresh events directly
+- OpenClaw runs this recovery command every five minutes
 
 ## How to run
 
 ```bash
-cd /Users/aaryan/Desktop/Trace && node --loader ts-node/esm -e "
-  const { createDatabase } = require('@trace/core');
-  const { ClusteringAgent } = require('@trace/core');
-  const { createTraceAI } = require('@trace/core');
-  // ... instantiate and run
-"
+cd /Users/aaryan/Desktop/Trace
+pnpm --filter @trace/service cli recover
 ```
 
-Or invoke via the Trace API: the service exposes clustering as part of its pipeline.
+The command loads the project `.env`, prevents overlapping runs, prints JSON statistics, and exits nonzero on failure.
 
 ## Safety constraints
 
 - Only reads and writes to the local Trace SQLite database
 - No filesystem access beyond the database file
-- AI calls limited to clustering decisions (no arbitrary generation)
+- Old `legacy_unresolved` rows are not replayed automatically

@@ -2,10 +2,13 @@ import type Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import type { Commit } from '../../models/index.js';
 
+const EMPTY_COMPARISON = { options: [], criteria: [], cells: [] };
+
 export class CommitRepository {
   constructor(private db: Database.Database) {}
 
-  create(data: Omit<Commit, 'id' | 'created_at' | 'regret' | 'regret_note'> & { id?: string }): Commit {
+  create(data: Omit<Commit, 'id' | 'created_at' | 'regret' | 'regret_note' | 'kind' | 'resolution_status' | 'comparison'> &
+    Partial<Pick<Commit, 'kind' | 'resolution_status' | 'comparison'>> & { id?: string }): Commit {
     const commit: Commit = {
       id: data.id ?? uuidv4(),
       branch_id: data.branch_id,
@@ -15,12 +18,15 @@ export class CommitRepository {
       created_at: new Date().toISOString(),
       regret: false,
       regret_note: null,
+      kind: data.kind ?? 'checkpoint',
+      resolution_status: data.resolution_status ?? 'in_progress',
+      comparison: data.comparison ?? EMPTY_COMPARISON,
     };
 
     this.db
       .prepare(
-        `INSERT INTO commits (id, branch_id, verdict_summary, reasoning, source_item_ids, created_at, regret, regret_note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO commits (id, branch_id, verdict_summary, reasoning, source_item_ids, created_at, regret, regret_note, kind, resolution_status, comparison_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         commit.id,
@@ -30,7 +36,10 @@ export class CommitRepository {
         JSON.stringify(commit.source_item_ids),
         commit.created_at,
         0,
-        null
+        null,
+        commit.kind,
+        commit.resolution_status,
+        JSON.stringify(commit.comparison),
       );
 
     return commit;
@@ -46,6 +55,18 @@ export class CommitRepository {
       .prepare('SELECT * FROM commits WHERE branch_id = ? ORDER BY created_at ASC')
       .all(branchId) as RawCommit[];
     return rows.map(toCommit);
+  }
+
+  getLatestByThread(threadId: string): Commit | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT commits.* FROM commits
+         JOIN branches ON branches.id = commits.branch_id
+         WHERE branches.thread_id = ?
+         ORDER BY commits.created_at DESC, commits.rowid DESC LIMIT 1`,
+      )
+      .get(threadId) as RawCommit | undefined;
+    return row ? toCommit(row) : undefined;
   }
 
   addRegret(id: string, note: string): Commit | undefined {
@@ -65,6 +86,9 @@ interface RawCommit {
   created_at: string;
   regret: number;
   regret_note: string | null;
+  kind: string;
+  resolution_status: string;
+  comparison_json: string;
 }
 
 function toCommit(row: RawCommit): Commit {
@@ -77,5 +101,8 @@ function toCommit(row: RawCommit): Commit {
     created_at: row.created_at,
     regret: row.regret === 1,
     regret_note: row.regret_note,
+    kind: row.kind as Commit['kind'],
+    resolution_status: row.resolution_status as Commit['resolution_status'],
+    comparison: JSON.parse(row.comparison_json || JSON.stringify(EMPTY_COMPARISON)),
   };
 }

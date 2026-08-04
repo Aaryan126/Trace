@@ -4,7 +4,6 @@ import type { BranchRepository } from '../db/repositories/branch-repository.js';
 import type { CommitRepository } from '../db/repositories/commit-repository.js';
 import type { SourceItemRepository } from '../db/repositories/source-item-repository.js';
 import type { FeedEventRepository } from '../db/repositories/feed-event-repository.js';
-import type { Commit } from '../models/index.js';
 
 export interface ResurfacingConfig {
   digestWindowDays: number;
@@ -30,8 +29,7 @@ export class ResurfacingAgent {
   }
 
   async generateReopenDiffs(): Promise<{ diffsGenerated: number }> {
-    const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-    const reopenEvents = this.feedEventRepo.listByType('reopen', since);
+    const reopenEvents = this.feedEventRepo.listByType('reopen');
 
     let diffsGenerated = 0;
 
@@ -40,16 +38,19 @@ export class ResurfacingAgent {
         const threadId = event.payload.threadId as string;
         if (!threadId) continue;
 
-        // Skip if a nudge already exists for this thread
-        const existingNudges = this.feedEventRepo.listByThreadAndType(threadId, 'nudge', since);
-        if (existingNudges.length > 0) continue;
+        const existingNudges = this.feedEventRepo.listByThreadAndType(threadId, 'nudge');
+        if (existingNudges.some((nudge) =>
+          nudge.payload.reopenEventId === event.id || nudge.payload.reopenEventId === undefined
+        )) continue;
 
         // Get the thread
         const thread = this.threadRepo.getById(threadId);
         if (!thread) continue;
 
         // Get the most recent commit on the trunk branch
-        const latestCommit = this.getLatestTrunkCommit(threadId);
+        const priorCommitId = event.payload.priorCommitId as string | undefined;
+        const latestCommit = (priorCommitId ? this.commitRepo.getById(priorCommitId) : undefined)
+          ?? this.commitRepo.getLatestByThread(threadId);
         if (!latestCommit) continue; // No prior verdict, can't generate diff
 
         // Get the source item that triggered the reopen
@@ -61,9 +62,7 @@ export class ResurfacingAgent {
         const diff = await this.ai.generateDiff(
           {
             text: item.raw_text ?? '',
-            entities: item.extracted_entities
-              ? (Object.keys(item.extracted_entities) as string[])
-              : [],
+            entities: extractEntities(item.extracted_entities),
             url: item.url,
           },
           {
@@ -78,6 +77,7 @@ export class ResurfacingAgent {
           thread_id: threadId,
           payload: {
             threadId,
+            reopenEventId: event.id,
             diff: { summary: diff.summary, changedFactors: diff.changedFactors },
             previousVerdict: latestCommit.verdict_summary,
             reopenReason: (event.payload.reason as string) ?? 'New activity detected',
@@ -153,15 +153,13 @@ export class ResurfacingAgent {
     return { diffsGenerated, digestsGenerated };
   }
 
-  private getLatestTrunkCommit(threadId: string): Commit | null {
-    const branches = this.branchRepo.listByThread(threadId);
-    const trunk = branches.find((b) => b.parent_commit_id === null);
-    if (!trunk) return null;
+}
 
-    const commits = this.commitRepo.listByBranch(trunk.id);
-    if (commits.length === 0) return null;
-
-    // listByBranch returns ASC order, so last element is most recent
-    return commits[commits.length - 1];
-  }
+function extractEntities(value: Record<string, unknown> | null): string[] {
+  if (!value) return [];
+  return Object.values(value).flatMap((entry) => {
+    if (typeof entry === 'string') return [entry];
+    if (Array.isArray(entry)) return entry.filter((item): item is string => typeof item === 'string');
+    return [];
+  });
 }

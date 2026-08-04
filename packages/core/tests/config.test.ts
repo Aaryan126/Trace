@@ -19,12 +19,17 @@ describe('loadConfig', () => {
   it('returns defaults when no config file exists', () => {
     const config = loadConfig(join(tempDir, 'nonexistent.json'));
     expect(config.dashboardPort).toBe(3333);
+    expect(config.browserHistoryPollIntervalMs).toBe(120_000);
+    expect(config.browserHistoryDebounceMs).toBe(1_500);
     expect(config.clusteringConfidenceThreshold).toBe(0.6);
+    expect(config.browserHistoryInitialLookbackHours).toBe(0);
     expect(config.quietWindowHours).toBe(24);
     expect(config.synthesisMinItems).toBe(2);
     expect(config.screenshotExtensions).toEqual(['.png', '.jpg', '.jpeg']);
-    expect(config.openai.model).toBe('gpt-5.4');
-    expect(config.openai.visionModel).toBe('gpt-5.4');
+    expect(config.openai.model).toBe('gpt-5.6-terra');
+    expect(config.openai.visionModel).toBe('gpt-5.6-terra');
+    expect(config.openai.checkpointModel).toBe('gpt-5.6-sol');
+    expect(config.checkpointQuietSeconds).toBe(25);
   });
 
   it('reads and merges a partial config file', () => {

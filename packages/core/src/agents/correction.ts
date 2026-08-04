@@ -1,22 +1,19 @@
-import type { Database } from 'better-sqlite3';
-import { v4 as uuidv4 } from 'uuid';
 import type { ThreadRepository } from '../db/repositories/thread-repository.js';
 import type { BranchRepository } from '../db/repositories/branch-repository.js';
 import type { SourceItemRepository } from '../db/repositories/source-item-repository.js';
-import type { FeedEventRepository } from '../db/repositories/feed-event-repository.js';
 
 export class CorrectionAgent {
   constructor(
-    private db: Database,
     private threadRepo: ThreadRepository,
     private branchRepo: BranchRepository,
     private sourceItemRepo: SourceItemRepository,
-    private feedEventRepo: FeedEventRepository,
   ) {}
 
   /** Move a source item to a different thread and mark it processed. */
   reassign(itemId: string, targetThreadId: string): void {
-    this.sourceItemRepo.assignToThread(itemId, targetThreadId);
+    const branch = this.branchRepo.getNewestByThread(targetThreadId);
+    if (!branch) throw new Error('Target thread has no branch');
+    this.sourceItemRepo.assignToThread(itemId, targetThreadId, branch.id, 1);
     this.sourceItemRepo.markProcessed(itemId);
   }
 
@@ -25,7 +22,12 @@ export class CorrectionAgent {
     // Move all source items to target thread
     const items = this.sourceItemRepo.listByThread(sourceThreadId);
     for (const item of items) {
-      this.sourceItemRepo.assignToThread(item.id, targetThreadId);
+      this.sourceItemRepo.assignToThread(
+        item.id,
+        targetThreadId,
+        item.branch_id,
+        item.clustering_confidence,
+      );
     }
 
     // Move all branches to target thread
@@ -47,7 +49,7 @@ export class CorrectionAgent {
       context_label: null,
     });
 
-    this.sourceItemRepo.assignToThread(itemId, thread.id);
+    this.sourceItemRepo.assignToThread(itemId, thread.id, branch.id, 1);
     this.sourceItemRepo.markProcessed(itemId);
 
     return { threadId: thread.id, branchId: branch.id };

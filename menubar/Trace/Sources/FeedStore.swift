@@ -57,9 +57,10 @@ final class FeedStore: ObservableObject {
                 events[idx] = FeedEvent(
                     id: old.id,
                     type: old.type,
-                    thread_id: old.thread_id,
-                    payload: old.payload,
-                    created_at: old.created_at,
+                    threadId: old.threadId,
+                    threadTitle: old.threadTitle,
+                    data: old.data,
+                    createdAt: old.createdAt,
                     read: true
                 )
             }
@@ -79,7 +80,7 @@ final class FeedStore: ObservableObject {
 
     /// Opens the dashboard in the default browser.
     func openDashboard() {
-        guard let url = URL(string: "http://127.0.0.1:5173") else { return }
+        guard let url = URL(string: "http://127.0.0.1:3333") else { return }
         NSWorkspace.shared.open(url)
     }
 }

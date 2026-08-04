@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import Trace
 
 final class TraceTests: XCTestCase {
@@ -12,22 +13,24 @@ final class TraceTests: XCTestCase {
                 {
                     "id": "evt_001",
                     "type": "digest",
-                    "thread_id": "thr_abc",
-                    "payload": {
+                    "threadId": "thr_abc",
+                    "threadTitle": "Weekly decisions",
+                    "data": {
                         "title": "Weekly digest",
                         "count": 5
                     },
-                    "created_at": "2026-07-26T10:00:00Z",
+                    "createdAt": "2026-07-26T10:00:00Z",
                     "read": false
                 },
                 {
                     "id": "evt_002",
                     "type": "commit_closed",
-                    "thread_id": null,
-                    "payload": {
+                    "threadId": "",
+                    "threadTitle": "Trace",
+                    "data": {
                         "message": "Build passed"
                     },
-                    "created_at": "2026-07-26T09:30:00Z",
+                    "createdAt": "2026-07-26T09:30:00Z",
                     "read": true
                 }
             ],
@@ -42,9 +45,9 @@ final class TraceTests: XCTestCase {
         XCTAssertEqual(response.unread, 1)
         XCTAssertEqual(response.events[0].id, "evt_001")
         XCTAssertEqual(response.events[0].type, "digest")
-        XCTAssertEqual(response.events[0].thread_id, "thr_abc")
+        XCTAssertEqual(response.events[0].threadId, "thr_abc")
         XCTAssertFalse(response.events[0].read)
-        XCTAssertNil(response.events[1].thread_id)
+        XCTAssertTrue(response.events[1].threadId.isEmpty)
         XCTAssertTrue(response.events[1].read)
     }
 
@@ -84,9 +87,10 @@ final class TraceTests: XCTestCase {
         {
             "id": "evt_100",
             "type": "digest",
-            "thread_id": "thr_xyz",
-            "payload": { "title": "Daily Summary" },
-            "created_at": "2026-07-26T08:00:00Z",
+            "threadId": "thr_xyz",
+            "threadTitle": "Daily decisions",
+            "data": { "title": "Daily Summary" },
+            "createdAt": "2026-07-26T08:00:00Z",
             "read": false
         }
         """.data(using: .utf8)!
@@ -100,9 +104,10 @@ final class TraceTests: XCTestCase {
         {
             "id": "evt_101",
             "type": "nudge",
-            "thread_id": null,
-            "payload": { "message": "Check your threads" },
-            "created_at": "2026-07-26T08:00:00Z",
+            "threadId": "",
+            "threadTitle": "Trace",
+            "data": { "message": "Check your threads" },
+            "createdAt": "2026-07-26T08:00:00Z",
             "read": false
         }
         """.data(using: .utf8)!
@@ -116,9 +121,10 @@ final class TraceTests: XCTestCase {
         {
             "id": "evt_102",
             "type": "reopen",
-            "thread_id": null,
-            "payload": {},
-            "created_at": "2026-07-26T08:00:00Z",
+            "threadId": "",
+            "threadTitle": "Trace",
+            "data": {},
+            "createdAt": "2026-07-26T08:00:00Z",
             "read": false
         }
         """.data(using: .utf8)!
@@ -201,5 +207,38 @@ final class TraceTests: XCTestCase {
         let client = APIClient()
         let url = await client.url(for: "api/feed/evt_123/read")
         XCTAssertEqual(url.absoluteString, "http://127.0.0.1:3333/api/feed/evt_123/read")
+    }
+
+    func testBrowserWindowTitleMatching() {
+        XCTAssertTrue(BrowserCaptureEngine.titleMatches(
+            historyTitle: "Postgres vs SQLite – Example",
+            windowTitle: "Postgres vs SQLite – Example - Google Chrome"
+        ))
+        XCTAssertFalse(BrowserCaptureEngine.titleMatches(
+            historyTitle: "Postgres vs SQLite",
+            windowTitle: "Private email inbox"
+        ))
+    }
+
+    func testFrontmostWindowSelectionUsesFirstLayerZeroWindowForBrowserProcess() {
+        let windows: [[String: Any]] = [
+            [kCGWindowOwnerPID as String: NSNumber(value: 99), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 1)],
+            [kCGWindowOwnerPID as String: NSNumber(value: 42), kCGWindowLayer as String: NSNumber(value: 3), kCGWindowNumber as String: NSNumber(value: 2)],
+            [kCGWindowOwnerPID as String: NSNumber(value: 42), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 3)],
+            [kCGWindowOwnerPID as String: NSNumber(value: 42), kCGWindowLayer as String: NSNumber(value: 0), kCGWindowNumber as String: NSNumber(value: 4)],
+        ]
+        XCTAssertEqual(BrowserCaptureEngine.frontmostWindowId(processIdentifier: 42, windowInfo: windows), 3)
+    }
+
+    func testCaptureFailureReasonsAreStableForAPIReporting() {
+        XCTAssertEqual(BrowserCaptureError.noMatchingWindow.reason, "no_matching_window")
+        XCTAssertEqual(BrowserCaptureError.privateWindow.reason, "private_window")
+        XCTAssertFalse(BrowserCaptureError.encodingFailed.message.isEmpty)
+    }
+
+    func testPrivateWindowDetection() {
+        XCTAssertTrue(BrowserCaptureEngine.isPrivateWindowTitle("New Incognito Window"))
+        XCTAssertTrue(BrowserCaptureEngine.isPrivateWindowTitle("Private Browsing"))
+        XCTAssertFalse(BrowserCaptureEngine.isPrivateWindowTitle("Database comparison"))
     }
 }

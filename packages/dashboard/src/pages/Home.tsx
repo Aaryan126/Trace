@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { FeedCard } from '../components/FeedCard';
-import { fetchFeed, markFeedRead, type FeedEvent } from '../lib/api';
+import { DecisionFlow } from '../components/DecisionFlow';
+import { EmptyState } from '../components/EmptyState';
+import { Icon } from '../components/Icon';
+import { PageHeader } from '../components/PageHeader';
+import { fetchFeed, markFeedGroupRead, type FeedEvent } from '../lib/api';
 
 interface OutletCtx {
   unreadCount: number;
@@ -9,7 +13,7 @@ interface OutletCtx {
 }
 
 export function Home() {
-  const { setUnreadCount } = useOutletContext<OutletCtx>();
+  const { unreadCount, setUnreadCount } = useOutletContext<OutletCtx>();
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +47,7 @@ export function Home() {
   const handleCardClick = async (event: FeedEvent) => {
     if (!event.read) {
       try {
-        await markFeedRead(event.id);
+        await markFeedGroupRead(event.eventIds);
         setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, read: true } : e)));
         setUnreadCount((prev: number) => Math.max(0, prev - 1));
       } catch {
@@ -60,11 +64,16 @@ export function Home() {
 
   if (loading && events.length === 0) {
     return (
-      <div>
-        <h2 className="text-xl font-semibold text-[#e6edf3] mb-6">Feed</h2>
-        <div className="space-y-3">
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Working tree"
+          title="Decision activity"
+          description="See what Trace committed, reopened, or needs from you."
+        />
+        <DecisionFlow />
+        <div className="space-y-3" aria-label="Loading activity">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-24 rounded-md bg-[#161b22] border border-[#30363d] animate-pulse" />
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-[#30363d] bg-[#161b22]" />
           ))}
         </div>
       </div>
@@ -73,8 +82,12 @@ export function Home() {
 
   if (error && events.length === 0) {
     return (
-      <div>
-        <h2 className="text-xl font-semibold text-[#e6edf3] mb-6">Feed</h2>
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Working tree"
+          title="Decision activity"
+          description="See what Trace committed, reopened, or needs from you."
+        />
         <div className="rounded-md border border-[#f85149]/30 bg-[#f85149]/10 p-4">
           <p className="text-sm text-[#f85149]">{error}</p>
           <button onClick={() => load(0)} className="mt-2 text-sm text-[#58a6ff] hover:underline">
@@ -86,10 +99,50 @@ export function Home() {
   }
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-[#e6edf3] mb-6">Feed</h2>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Working tree"
+        title="Decision activity"
+        description="Trace turns relevant evidence into durable verdicts and shows you exactly when context changes."
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="panel-soft flex items-center gap-4 p-4">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#58a6ff]/25 bg-[#58a6ff]/10 text-[#58a6ff]">
+            <Icon name="activity" />
+          </span>
+          <div>
+            <p className="text-2xl font-semibold text-[#f0f6fc]">{unreadCount}</p>
+            <p className="text-xs text-[#8b949e]">Unread decision updates</p>
+          </div>
+        </div>
+        <div className="panel-soft flex items-center gap-4 p-4">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#3fb950]/25 bg-[#3fb950]/10 text-[#3fb950]">
+            <Icon name="commit" />
+          </span>
+          <div>
+            <p className="text-2xl font-semibold text-[#f0f6fc]">{events.length}</p>
+            <p className="text-xs text-[#8b949e]">Recent lifecycle events loaded</p>
+          </div>
+        </div>
+      </div>
+
+      <DecisionFlow />
+
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-[#e6edf3]">Latest activity</h3>
+            <p className="mt-1 text-xs text-[#8b949e]">Commits are saved verdicts; revisits are new branches from an earlier decision.</p>
+          </div>
+          <span className="mono text-[10px] uppercase tracking-wider text-[#6e7681]">newest first</span>
+        </div>
       {events.length === 0 ? (
-        <p className="text-[#8b949e] text-sm">No feed events yet.</p>
+          <EmptyState
+            icon="activity"
+            title="No decision activity yet"
+            description="Relevant evidence will appear after it is grouped into a decision. Ordinary browsing is ignored automatically."
+          />
       ) : (
         <div className="space-y-3">
           {events.map((event) => (
@@ -102,12 +155,13 @@ export function Home() {
           <button
             onClick={handleLoadMore}
             disabled={loading}
-            className="rounded-md border border-[#30363d] bg-[#161b22] px-4 py-2 text-sm text-[#58a6ff] hover:bg-[#1c2128] disabled:opacity-50 transition-colors"
+            className="button-secondary"
           >
             {loading ? 'Loading…' : 'Load more'}
           </button>
         </div>
       )}
+      </section>
     </div>
   );
 }

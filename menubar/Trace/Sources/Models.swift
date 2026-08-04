@@ -65,21 +65,25 @@ struct FeedResponse: Codable, Equatable {
 struct FeedEvent: Codable, Identifiable, Equatable {
     let id: String
     let type: String  // reopen, digest, commit_closed, nudge
-    let thread_id: String?
-    let payload: [String: JSONValue]
-    let created_at: String
+    let threadId: String
+    let threadTitle: String
+    let data: [String: JSONValue]
+    let createdAt: String
     let read: Bool
 
     /// Returns a human-readable summary from the payload, falling back to the event type.
     var summary: String {
-        if let title = payload["title"]?.stringValue {
+        if let title = data["title"]?.stringValue {
             return title
         }
-        if let message = payload["message"]?.stringValue {
+        if let message = data["message"]?.stringValue {
             return message
         }
-        if let summary = payload["summary"]?.stringValue {
+        if let summary = data["diffSummary"]?.stringValue {
             return summary
+        }
+        if let verdict = data["verdictSummary"]?.stringValue {
+            return verdict
         }
         return type.formattedEventType
     }
@@ -92,10 +96,45 @@ struct FeedEvent: Codable, Identifiable, Equatable {
     static func == (lhs: FeedEvent, rhs: FeedEvent) -> Bool {
         lhs.id == rhs.id
             && lhs.type == rhs.type
-            && lhs.thread_id == rhs.thread_id
-            && lhs.created_at == rhs.created_at
+            && lhs.threadId == rhs.threadId
+            && lhs.createdAt == rhs.createdAt
             && lhs.read == rhs.read
     }
+}
+
+struct BrowserCaptureRequest: Codable, Equatable {
+    let id: String
+    let sourceItemId: String
+    let title: String
+    let url: String
+    let availableAt: String
+}
+
+struct BrowserCapturePayload: Codable, Equatable {
+    let fullImageBase64: String
+    let thumbnailBase64: String
+    let ocrText: String
+    let width: Int
+    let height: Int
+    let visualHash: String
+}
+
+struct BrowserCaptureAgentHealth: Codable, Equatable {
+    let id: String
+    let connected: Bool
+    let authorized: Bool
+    let lastHeartbeatAt: String?
+}
+
+struct BrowserCaptureHealth: Codable, Equatable {
+    let enabled: Bool
+    let authorized: Bool
+    let connected: Bool
+    let agents: [BrowserCaptureAgentHealth]
+}
+
+struct LiveTraceHealthResponse: Codable, Equatable {
+    let capture: BrowserCaptureHealth
 }
 
 // MARK: - String Extension

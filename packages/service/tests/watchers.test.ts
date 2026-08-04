@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -37,7 +37,6 @@ import { readFile as fsReadFile } from 'node:fs/promises';
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function createMockAI() {
   return {
@@ -229,6 +228,11 @@ describe('BrowserHistoryReader', () => {
   let safariFixturePath: string;
   let appDb: ReturnType<typeof createInMemoryDatabase>;
   let repo: SourceItemRepository;
+  let historyWatcher: {
+    handlers: Record<string, ((...args: unknown[]) => void)[]>;
+    on: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+  };
 
   // Chrome epoch offset: seconds between 1601-01-01 and 1970-01-01
   const CHROME_EPOCH_OFFSET = 11_644_473_600;
@@ -315,13 +319,117 @@ describe('BrowserHistoryReader', () => {
   });
 
   beforeEach(() => {
+    historyWatcher = {
+      handlers: {},
+      on: vi.fn(function (
+        this: typeof historyWatcher,
+        event: string,
+        handler: (...args: unknown[]) => void,
+      ) {
+        if (!this.handlers[event]) this.handlers[event] = [];
+        this.handlers[event].push(handler);
+        return this;
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    historyWatcher.on = historyWatcher.on.bind(historyWatcher);
+    (chokidar.watch as ReturnType<typeof vi.fn>).mockReturnValue(historyWatcher);
     appDb = createInMemoryDatabase();
     repo = new SourceItemRepository(appDb);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function emitHistoryEvent(event: string, path: string): void {
+    for (const handler of historyWatcher.handlers[event] ?? []) handler(path);
+  }
+
+  it('debounces database and WAL changes into one prompt poll', async () => {
+    vi.useFakeTimers();
+    const reader = new BrowserHistoryReader(
+      {
+        chromePath: chromeFixturePath,
+        safariPath: safariFixturePath,
+        debounceMs: 1_500,
+        pollIntervalMs: 120_000,
+      },
+      repo,
+      appDb,
+    );
+    const poll = vi.spyOn(reader, 'poll').mockResolvedValue(0);
+
+    reader.start();
+
+    expect(chokidar.watch).toHaveBeenCalledWith(
+      [fixtureDir],
+      { depth: 0, ignoreInitial: true, persistent: true },
+    );
+    expect(poll).toHaveBeenCalledTimes(1);
+
+    emitHistoryEvent('change', join(fixtureDir, 'unrelated.db'));
+    emitHistoryEvent('change', chromeFixturePath);
+    await vi.advanceTimersByTimeAsync(500);
+    emitHistoryEvent('change', `${chromeFixturePath}-wal`);
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(poll).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(poll).toHaveBeenCalledTimes(2);
+    await reader.stop();
+  });
+
+  it('keeps a slow fallback poll when no file event arrives', async () => {
+    vi.useFakeTimers();
+    const reader = new BrowserHistoryReader(
+      {
+        chromePath: chromeFixturePath,
+        safariPath: safariFixturePath,
+        debounceMs: 1_500,
+        pollIntervalMs: 120_000,
+      },
+      repo,
+      appDb,
+    );
+    const poll = vi.spyOn(reader, 'poll').mockResolvedValue(0);
+
+    reader.start();
+    await vi.advanceTimersByTimeAsync(119_999);
+    expect(poll).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(poll).toHaveBeenCalledTimes(2);
+    await reader.stop();
+  });
+
+  it('closes the file watcher and cancels pending and fallback polls on stop', async () => {
+    vi.useFakeTimers();
+    const reader = new BrowserHistoryReader(
+      {
+        chromePath: chromeFixturePath,
+        safariPath: safariFixturePath,
+        debounceMs: 1_500,
+        pollIntervalMs: 120_000,
+      },
+      repo,
+      appDb,
+    );
+    const poll = vi.spyOn(reader, 'poll').mockResolvedValue(0);
+
+    reader.start();
+    emitHistoryEvent('change', `${safariFixturePath}-wal`);
+    await reader.stop();
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect(historyWatcher.close).toHaveBeenCalledOnce();
+    expect(poll).toHaveBeenCalledTimes(1);
+  });
+
   it('creates SourceItems from Chrome history fixture', async () => {
     const reader = new BrowserHistoryReader(
-      { chromePath: chromeFixturePath, safariPath: '/nonexistent/safari' },
+      { chromePath: chromeFixturePath, safariPath: '/nonexistent/safari', initialLookbackHours: 100_000 },
       repo,
       appDb,
     );
@@ -343,12 +451,12 @@ describe('BrowserHistoryReader', () => {
     const titles = items.map((i) => i.raw_text).sort();
     expect(titles).toEqual(['Example Page 1', 'Example Page 2', 'GitHub Test Repo']);
 
-    reader.stop();
+    await reader.stop();
   });
 
   it('creates SourceItems from Safari history fixture', async () => {
     const reader = new BrowserHistoryReader(
-      { chromePath: '/nonexistent/chrome', safariPath: safariFixturePath },
+      { chromePath: '/nonexistent/chrome', safariPath: safariFixturePath, initialLookbackHours: 100_000 },
       repo,
       appDb,
     );
@@ -362,12 +470,10 @@ describe('BrowserHistoryReader', () => {
     const urls = items.map((i) => i.url).sort();
     expect(urls).toEqual(['https://apple.com', 'https://developer.apple.com']);
 
-    reader.stop();
+    await reader.stop();
   });
 
   it('deduplicates — same URL not re-ingested via duplicate check', async () => {
-    const metadata = new MetadataRepository(appDb);
-
     // Pre-insert a source item for a URL that also exists in the Chrome fixture
     repo.create({
       type: 'browser_history',
@@ -379,7 +485,7 @@ describe('BrowserHistoryReader', () => {
     });
 
     const reader = new BrowserHistoryReader(
-      { chromePath: chromeFixturePath, safariPath: '/nonexistent/safari' },
+      { chromePath: chromeFixturePath, safariPath: '/nonexistent/safari', initialLookbackHours: 100_000 },
       repo,
       appDb,
     );
@@ -393,7 +499,7 @@ describe('BrowserHistoryReader', () => {
     const page1Items = items.filter((i) => i.url === 'https://example.com/page1');
     expect(page1Items).toHaveLength(1); // only the pre-inserted one
 
-    reader.stop();
+    await reader.stop();
   });
 
   it('handles missing history files gracefully (returns 0)', async () => {
@@ -410,7 +516,7 @@ describe('BrowserHistoryReader', () => {
     expect(count).toBe(0);
     expect(repo.listUnprocessed()).toHaveLength(0);
 
-    reader.stop();
+    await reader.stop();
   });
 
   it('updates last-poll timestamp after successful poll', async () => {
@@ -419,28 +525,60 @@ describe('BrowserHistoryReader', () => {
     expect(metadata.get('safari_last_poll')).toBeNull();
 
     const reader = new BrowserHistoryReader(
-      { chromePath: chromeFixturePath, safariPath: safariFixturePath },
+      { chromePath: chromeFixturePath, safariPath: safariFixturePath, initialLookbackHours: 100_000 },
       repo,
       appDb,
     );
 
-    const beforePoll = new Date();
     await reader.poll();
-    const afterPoll = new Date();
 
     const chromeTs = metadata.get('chrome_last_poll');
     expect(chromeTs).not.toBeNull();
     const chromeDate = new Date(chromeTs!);
-    expect(chromeDate.getTime()).toBeGreaterThanOrEqual(beforePoll.getTime());
-    expect(chromeDate.getTime()).toBeLessThanOrEqual(afterPoll.getTime());
+    expect(chromeDate.toISOString()).toBe('2024-06-15T12:00:00.000Z');
 
     const safariTs = metadata.get('safari_last_poll');
     expect(safariTs).not.toBeNull();
     const safariDate = new Date(safariTs!);
-    expect(safariDate.getTime()).toBeGreaterThanOrEqual(beforePoll.getTime());
-    expect(safariDate.getTime()).toBeLessThanOrEqual(afterPoll.getTime());
+    expect(safariDate.toISOString()).toBe('2024-06-15T11:00:00.000Z');
 
-    reader.stop();
+    await reader.stop();
+  });
+
+  it('establishes a first-run baseline without importing existing browser history', async () => {
+    const metadata = new MetadataRepository(appDb);
+    const reader = new BrowserHistoryReader(
+      { chromePath: chromeFixturePath, safariPath: safariFixturePath, initialLookbackHours: 0 },
+      repo,
+      appDb,
+    );
+
+    const count = await reader.poll();
+
+    expect(count).toBe(0);
+    expect(repo.listUnprocessed()).toHaveLength(0);
+    expect(metadata.get('chrome_last_poll')).not.toBeNull();
+    expect(metadata.get('safari_last_poll')).not.toBeNull();
+    await reader.stop();
+  });
+
+  it('imports only browser visits newer than the established baseline', async () => {
+    const metadata = new MetadataRepository(appDb);
+    metadata.set('chrome_last_poll', '2024-06-15T11:30:00.000Z');
+    const reader = new BrowserHistoryReader(
+      { chromePath: chromeFixturePath, safariPath: '/nonexistent/safari', initialLookbackHours: 0 },
+      repo,
+      appDb,
+    );
+
+    const count = await reader.poll();
+    const items = repo.listUnprocessed();
+
+    expect(count).toBe(1);
+    expect(items).toHaveLength(1);
+    expect(items[0].raw_text).toBe('GitHub Test Repo');
+    expect(items[0].captured_at).toBe('2024-06-15T12:00:00.000Z');
+    await reader.stop();
   });
 
   it('Chrome timestamp conversion is correct (microseconds since 1601)', () => {

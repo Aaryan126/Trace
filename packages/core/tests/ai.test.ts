@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mock setup (hoisted so vi.mock factory can reference them) ──────────────
 
@@ -17,12 +17,11 @@ const { mockCreate, MockRateLimitError } = vi.hoisted(() => {
 });
 
 vi.mock('openai', () => {
-  const MockOpenAI: any = vi.fn().mockImplementation(() => ({
+  const MockOpenAI = Object.assign(vi.fn().mockImplementation(() => ({
     chat: {
       completions: { create: mockCreate },
     },
-  }));
-  MockOpenAI.RateLimitError = MockRateLimitError;
+  })), { RateLimitError: MockRateLimitError });
   return { default: MockOpenAI };
 });
 
@@ -217,9 +216,42 @@ describe('TraceAI', () => {
       expect(result.suggestedTitle).toBe('React adoption decision');
     });
 
+    it('returns an "ignore" decision for non-decision browsing', async () => {
+      const expected = {
+        decision: 'ignore',
+        threadId: null,
+        confidence: 0.98,
+        reason: 'No decision intent',
+      };
+      mockCreate.mockResolvedValueOnce(jsonResponse(expected));
+
+      const result = await ai.clusterItem(item, []);
+      expect(result).toEqual(expected);
+      expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('must be ignored');
+    });
+
     it('throws on malformed JSON', async () => {
       mockCreate.mockResolvedValueOnce(jsonResponse('{broken'));
       await expect(ai.clusterItem(item, threads)).rejects.toThrow(/Failed to parse/);
+    });
+  });
+
+  describe('routeResearch', () => {
+    it('sends screenshot pixels alongside routing context when available', async () => {
+      const decision = {
+        action: 'ignore', threadId: null, branchId: null, confidence: 0.9,
+        rationale: 'Not decision-relevant', title: null, contextLabel: null,
+        researchQuestion: '', summary: '', options: [], constraints: [], openQuestions: [],
+        tentativeDirection: null, changedFactors: [], checkpointNow: false,
+      };
+      mockCreate.mockResolvedValueOnce(jsonResponse(decision));
+      const image = 'data:image/jpeg;base64,/9j/';
+
+      await ai.routeResearch({ text: 'Comparison page', entities: [], url: 'https://example.com' }, [], image);
+
+      const content = mockCreate.mock.calls[0][0].messages[1].content;
+      expect(content[0].type).toBe('text');
+      expect(content[1]).toEqual({ type: 'image_url', image_url: { url: image, detail: 'high' } });
     });
   });
 
@@ -324,7 +356,7 @@ describe('TraceAI', () => {
 
     it('does not retry on non-rate-limit errors', async () => {
       const authErr = new Error('Unauthorized');
-      (authErr as any).status = 401;
+      (authErr as Error & { status: number }).status = 401;
       mockCreate.mockRejectedValue(authErr);
 
       await expect(ai.clusterItem({ text: '', entities: [], url: null }, [])).rejects.toThrow(

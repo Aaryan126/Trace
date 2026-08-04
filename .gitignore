@@ -27,3 +27,4 @@ pnpm-debug.log*
 
 # Runtime PIDs
 .trace-*.pid
+.trace-build/

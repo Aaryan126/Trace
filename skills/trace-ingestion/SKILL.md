@@ -4,8 +4,7 @@ description: Watches screenshots and browser history to capture decision-researc
 metadata:
   openclaw:
     requires:
-      env: ["OPENAI_API_KEY"]
-      bins: ["node"]
+      bins: ["pnpm"]
     os: ["darwin"]
 ---
 
@@ -13,8 +12,8 @@ metadata:
 
 You manage the Trace ingestion pipeline. This skill monitors the user's research activity by:
 
-1. **Screenshot watching** — monitors a configured directory for new screenshots, runs OCR via GPT-5.4 vision to extract text, entities, and URLs.
-2. **Browser history polling** — reads Chrome and Safari history databases on an interval to capture research trails.
+1. **Screenshot watching** — monitors a configured directory for new screenshots, runs vision extraction to capture text, entities, and URLs.
+2. **Browser history watching** — watches Chrome and Safari history SQLite files and reads safe snapshots after changes to capture research trails.
 
 ## When to activate
 
@@ -26,7 +25,8 @@ You manage the Trace ingestion pipeline. This skill monitors the user's research
 Use the `exec` tool to start the Trace service process:
 
 ```bash
-cd /Users/aaryan/Desktop/Trace && node --loader ts-node/esm packages/service/src/index.ts
+cd /Users/aaryan/Desktop/Trace
+./scripts/start.sh
 ```
 
 The service starts both the screenshot watcher and browser history reader automatically.
@@ -34,13 +34,13 @@ The service starts both the screenshot watcher and browser history reader automa
 ## Configuration
 
 The service reads configuration from `~/.trace/config.json` or environment variables:
-- `TRACE_SCREENSHOT_DIR` — directory to watch (default: ~/Desktop)
-- `TRACE_HISTORY_POLL_MS` — browser history poll interval in ms (default: 300000)
 - `OPENAI_API_KEY` — required for OCR extraction
+
+The remaining settings come from `~/.trace/config.json` or `trace.config.json`. By default, the first browser read records the current Chrome/Safari position as a baseline and imports no backlog. Later database changes are coalesced for 1.5 seconds before a safe snapshot read; a two-minute fallback poll covers missed filesystem events. Set `browserHistoryInitialLookbackHours` above zero only when an intentional historical import is required.
 
 ## Safety constraints
 
 - Read-only access to browser history (copies DB to temp before reading)
 - Only watches a single configured directory for screenshots
-- No network access beyond OpenAI API calls
+- Network access is limited to OpenAI API calls and bounded public-page fetches without browser cookies or JavaScript
 - No file modifications outside ~/.trace/
