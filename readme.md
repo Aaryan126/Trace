@@ -2,9 +2,9 @@
 
 ## Overview
 
-Trace is a tool that treats your personal decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, and context.
+Trace is a tool that treats research-backed decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, evidence, and context.
 
-Developers constantly re-research the same decisions: "Postgres or Mongo?", "Which auth provider?", "Should I use this library again?" — and lose track of what they concluded last time and why. Trace fixes that.
+Whenever people research an important decision—choosing a model, treatment, product, vendor, methodology, destination, or strategy—they open many sources, reach a conclusion, and eventually forget why. When the decision returns, they often repeat the investigation from zero. Trace preserves what they investigated, what they concluded, why they concluded it, and what changed when they returned.
 
 ## Core Concepts
 
@@ -21,8 +21,8 @@ Developers constantly re-research the same decisions: "Postgres or Mongo?", "Whi
 
 ## Target User
 
-- **Primary:** Developers who live in browser + VS Code + terminal, hitting the same technical decisions across projects.
-- **Secondary (post-v1):** Anyone doing recurring high-stakes research.
+- **Primary:** Anyone who repeatedly makes research-backed decisions across work, study, or personal life—including researchers, students, founders, analysts, designers, developers, and careful consumers.
+- **Initial integration wedge:** Developers already understand Git’s mental model and can resurface Trace decisions directly inside Qoder, making them a strong first demonstration rather than the boundary of the product.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ Developers constantly re-research the same decisions: "Postgres or Mongo?", "Whi
 - **Models:** GPT-5.6 Terra (low reasoning) for live routing, GPT-5.6 Sol (medium reasoning) for checkpoints/reconciliation, and `text-embedding-3-small` for retrieval
 - **Storage:** SQLite (local-first)
 - **UI:** Native menu bar app (SwiftUI) + localhost web dashboard
-- **Developer integration:** Read-only local MCP server for Qoder and other compatible clients
+- **Workflow integration:** Read-only local MCP server; Qoder is the first supported example
 
 ### Agents
 
