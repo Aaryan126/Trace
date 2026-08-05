@@ -4,7 +4,7 @@
 
 Trace is a tool that treats research-backed decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, evidence, and context.
 
-Whenever people research an important decision—choosing a model, treatment, product, vendor, methodology, destination, or strategy—they open many sources, reach a conclusion, and eventually forget why. When the decision returns, they often repeat the investigation from zero. Trace preserves what they investigated, what they concluded, why they concluded it, and what changed when they returned.
+Whenever people research an important decision—choosing a model, treatment, product, vendor, methodology, destination, or strategy—they open many sources, reach a conclusion, and eventually forget why. Later, when they revisit the same choice, they often repeat the investigation from zero. Trace preserves what they investigated, what they concluded, why they concluded it, and what changed when they revisited it.
 
 ## Core Concepts
 
