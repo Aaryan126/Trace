@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import dagre from '@dagrejs/dagre';
 import {
   Background,
@@ -41,6 +42,7 @@ interface CanvasNodeData extends Record<string, unknown> {
   onSetOutcome?: (status: ApiDecisionOutcomeStatus, note: string) => Promise<void>;
   onCorrect?: (optionId: string, criterionId: string, value: string, status: ComparisonStatus) => Promise<void>;
   onReset?: (optionId: string, criterionId: string) => Promise<void>;
+  onExpandComparison?: () => void;
 }
 
 type CanvasNode = Node<CanvasNodeData, 'research'>;
@@ -84,8 +86,10 @@ export function ThreadGraph(props: ThreadGraphProps) {
 function ResearchCanvas(props: ThreadGraphProps) {
   const [density, setDensity] = useState<Density>('reading');
   const [selected, setSelected] = useState<string | null>(props.selectedId ?? null);
+  const [comparisonExpanded, setComparisonExpanded] = useState(false);
   const reducedMotion = useReducedMotion();
-  const graph = useMemo(() => buildCanvasGraph(props, selected), [props.tree, props.commits, props.workingStates, props.story, props.currentAnswer, props.comparison, props.resume, props.outcomeReview, props.threadTitle, props.onResume, props.onSetOutcome, props.onCorrectComparison, props.onResetComparison, selected]);
+  const expandComparison = useCallback(() => setComparisonExpanded(true), []);
+  const graph = useMemo(() => buildCanvasGraph(props, selected, expandComparison), [props.tree, props.commits, props.workingStates, props.story, props.currentAnswer, props.comparison, props.resume, props.outcomeReview, props.threadTitle, props.onResume, props.onSetOutcome, props.onCorrectComparison, props.onResetComparison, selected, expandComparison]);
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(graph.nodes);
   const { fitView } = useReactFlow<CanvasNode, Edge>();
 
@@ -147,6 +151,13 @@ function ResearchCanvas(props: ThreadGraphProps) {
             </button>
           </Panel>
         </ReactFlow>
+        <ComparisonOverlay
+          open={comparisonExpanded}
+          matrix={props.comparison}
+          onClose={() => setComparisonExpanded(false)}
+          onCorrect={props.onCorrectComparison}
+          onReset={props.onResetComparison}
+        />
       </div>
     </MotionConfig>
   );
@@ -168,6 +179,7 @@ function ResearchNode({ data, selected }: NodeProps<CanvasNode>) {
         <div className="research-node-topline">
           <span className="research-node-kind"><NodeGlyph kind={data.kind} />{data.eyebrow}</span>
           {data.status && <span className={`research-status research-status-${data.status}`}>{data.status.replace('_', ' ')}</span>}
+          {data.kind === 'comparison' && <button type="button" className="comparison-expand-button" aria-label="Expand comparison" onClick={(event) => { event.stopPropagation(); data.onExpandComparison?.(); }}><span aria-hidden="true">↗</span> Expand</button>}
         </div>
         <h3>{data.title}</h3>
         {showReading && <p className="research-node-summary">{data.summary}</p>}
@@ -205,6 +217,37 @@ function ResearchNode({ data, selected }: NodeProps<CanvasNode>) {
       </div>
       <Handle type="source" position={Position.Right} className="research-handle" />
     </article>
+  );
+}
+
+function ComparisonOverlay({ open, matrix, onClose, onCorrect, onReset }: {
+  open: boolean;
+  matrix?: ApiComparisonMatrix;
+  onClose: () => void;
+  onCorrect?: CanvasNodeData['onCorrect'];
+  onReset?: CanvasNodeData['onReset'];
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [onClose, open]);
+
+  if (!open || !matrix) return null;
+  return createPortal(
+    <motion.div className="comparison-overlay" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <motion.section className="comparison-expanded-panel" role="dialog" aria-modal="true" aria-label="Expanded live comparison" initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }}>
+        <header className="comparison-expanded-header">
+          <div><span>Live comparison</span><h2>Options, claims, and unknowns</h2><p>Scroll across every option and down through every criterion. Cells remain editable.</p></div>
+          <button type="button" aria-label="Close expanded comparison" onClick={onClose}>×</button>
+        </header>
+        <div className="comparison-expanded-scroll">
+          <ComparisonGrid matrix={matrix} onCorrect={onCorrect} onReset={onReset} />
+        </div>
+      </motion.section>
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -291,7 +334,7 @@ function NodeGlyph({ kind }: { kind: CanvasKind }) {
   return <span aria-hidden="true">{glyph}</span>;
 }
 
-function buildCanvasGraph(props: ThreadGraphProps, selectedId: string | null): { nodes: CanvasNode[]; edges: Edge[] } {
+function buildCanvasGraph(props: ThreadGraphProps, selectedId: string | null, onExpandComparison?: () => void): { nodes: CanvasNode[]; edges: Edge[] } {
   const density: Density = 'reading';
   const storyNodes: ApiResearchStoryNode[] = props.story?.nodes ?? props.commits.map((commit) => ({
     id: commit.id, kind: commit.kind === 'merge' ? 'merge' : commit.resolutionStatus === 'resolved' ? 'decision' : 'checkpoint', branchId: commit.branchId ?? props.rootBranchId ?? 'main',
@@ -314,7 +357,7 @@ function buildCanvasGraph(props: ThreadGraphProps, selectedId: string | null): {
     rawEdges.push({ id: `${latest?.id ?? 'origin'}:current-answer`, source: latest?.id ?? 'origin', target: 'current-answer', type: 'smoothstep', className: 'story-edge story-edge-answer', markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 } });
   }
   if (props.comparison?.options.length) {
-    rawNodes.push({ id: 'comparison', type: 'research', position: { x: 0, y: 0 }, draggable: false, data: { kind: 'comparison', eyebrow: 'Live comparison', title: 'Options, claims, and unknowns', summary: 'Trace updates this source-backed matrix as evidence arrives.', sources: latest?.sourceItems ?? [], density, comparison: props.comparison, onCorrect: props.onCorrectComparison, onReset: props.onResetComparison } });
+    rawNodes.push({ id: 'comparison', type: 'research', position: { x: 0, y: 0 }, draggable: false, data: { kind: 'comparison', eyebrow: 'Live comparison', title: 'Options, claims, and unknowns', summary: 'Trace updates this source-backed matrix as evidence arrives.', sources: latest?.sourceItems ?? [], density, comparison: props.comparison, onCorrect: props.onCorrectComparison, onReset: props.onResetComparison, onExpandComparison } });
     rawEdges.push({ id: 'current-answer:comparison', source: props.currentAnswer ? 'current-answer' : latest?.id ?? 'origin', target: 'comparison', type: 'smoothstep', className: 'story-edge story-edge-context' });
   }
   if (props.resume) {

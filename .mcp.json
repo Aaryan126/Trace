@@ -2,7 +2,7 @@
   "mcpServers": {
     "trace": {
       "command": "node",
-      "args": ["packages/service/dist/mcp.js"]
+      "args": ["/Users/aaryan/Desktop/Trace/packages/service/dist/mcp.js"]
     }
   }
 }

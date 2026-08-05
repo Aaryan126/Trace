@@ -7,7 +7,7 @@ This file tracks the latest implementation progress, decisions made, and technic
 ## Current Status
 
 **Phase:** Autonomous Trace v5 implemented — closed decision/outcome loops, deduplicated autonomous research, privacy-first capture, canvas audit, and read-only Qoder MCP retrieval
-**Last Updated:** 2026-08-04
+**Last Updated:** 2026-08-05
 
 ---
 
@@ -37,7 +37,7 @@ This file tracks the latest implementation progress, decisions made, and technic
 | Reopen detection | Done | |
 | Diff generation | Done | |
 | Heartbeat digest job | Done | |
-| Dashboard: Decision workspace | Done | Light-first interactive research canvas with deterministic left-to-right layout, semantic zoom, screenshots, current answer, source-backed comparison, Resume Research, automatic/manual reconciliation provenance, and outcome review |
+| Dashboard: Decision workspace | Done | Light-first interactive research canvas with deterministic left-to-right layout, semantic zoom, screenshots, current answer, expandable source-backed comparison, Resume Research, automatic/manual reconciliation provenance, and outcome review |
 | Dashboard: All-threads list | Done | Repository layout sorted by real evidence activity |
 | Dashboard: Activity + Live Trace drawers | Done | Audit events and live pipeline/capture health moved into contextual drawers; neither is an approval gate |
 
@@ -92,6 +92,7 @@ Record key implementation decisions here as they are made.
 | 2026-08-04 | Outcomes are first-class decision history | Resolved commits can record worked, mixed, regretted, or superseded outcomes. Legacy regret remains compatible and maps to the outcome view. |
 | 2026-08-04 | Deduplication is layered and conservative | Normalized URLs are suppressed within a 30-minute session; high-similarity same-anchor questions reuse an existing single-branch thread; distinct later revisits remain eligible evidence. |
 | 2026-08-04 | Trace exposes read-only MCP tools | Qoder receives focused decision retrieval through the official MCP SDK over project-scoped STDIO; the database is opened read-only and no mutation tools are registered. |
+| 2026-08-05 | Wide comparisons expand outside the graph viewport | The map keeps a stable compact comparison node, while an explicit Expand control opens the same editable matrix in a near-fullscreen, independently scrollable panel with sticky headers and criterion labels. |
 
 ---
 
@@ -130,6 +131,10 @@ MergeEvent
 ---
 
 ## Implementation Notes
+
+### 2026-08-05 — Expanded Live Comparison
+- Added an explicit Expand action to the live-comparison node. Wide matrices now open in a near-fullscreen panel with horizontal and vertical scrolling, sticky option headers and criterion labels, Escape/backdrop/close-button dismissal, and the existing cell-correction controls intact.
+- Added a dashboard regression test for opening, inspecting, and closing the expanded matrix. The focused dashboard test suite and production TypeScript/Vite build pass.
 
 ### 2026-08-04 — Closed Decision Loop, Deduplication, Privacy, and Qoder MCP (Schema v7)
 - Refined checkpoint closure in both the Sol prompt and service policy. A concrete default can resolve while minor testing remains; questions about requirements, context, or the actual choice remain blocking.

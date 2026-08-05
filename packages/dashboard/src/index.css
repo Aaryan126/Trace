@@ -207,6 +207,8 @@ code,
 .research-node-answer .research-node-body { border-color: color-mix(in srgb, var(--success) 42%, var(--border)); background: color-mix(in srgb, var(--success) 4%, var(--surface)); }
 .research-node-working .research-node-body { border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); }
 .research-node-comparison .research-node-body { border-color: color-mix(in srgb, #0f766e 38%, var(--border)); }
+.comparison-expand-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.25rem; border: 1px solid color-mix(in srgb, #0f766e 32%, var(--border)); border-radius: 0.4rem; background: color-mix(in srgb, #0f766e 7%, var(--surface)); padding: 0.25rem 0.4rem; color: #0f766e; font-size: 0.55rem; font-weight: 750; }
+.comparison-expand-button:hover { background: color-mix(in srgb, #0f766e 13%, var(--surface)); }
 .research-node-resume .research-node-body { border-color: color-mix(in srgb, #7c3aed 42%, var(--border)); background: color-mix(in srgb, #7c3aed 4%, var(--surface)); }
 .research-node-outcome .research-node-body { border-color: color-mix(in srgb, #b45309 42%, var(--border)); background: color-mix(in srgb, #b45309 4%, var(--surface)); }
 .research-node-topline { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.5rem; }
@@ -253,6 +255,22 @@ code,
 .comparison-cell form div { display: flex; gap: 0.3rem; color: var(--accent); }
 .comparison-reset { margin-top: 0.2rem; color: var(--accent); font-size: 0.5rem; }
 .comparison-empty { margin: 0.8rem 0 0; border: 1px dashed var(--border); border-radius: 0.5rem; padding: 0.65rem; color: var(--text-muted); font-size: 0.65rem; line-height: 1.45; }
+.comparison-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, #0f172a 38%, transparent); padding: clamp(0.75rem, 3vw, 2rem); backdrop-filter: blur(5px); }
+.comparison-expanded-panel { display: flex; width: min(1440px, 96vw); height: min(860px, 92vh); min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); box-shadow: 0 30px 90px rgba(15, 23, 42, 0.28); }
+.comparison-expanded-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--border); padding: 1.1rem 1.25rem; }
+.comparison-expanded-header span { color: #0f766e; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.62rem; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; }
+.comparison-expanded-header h2 { margin: 0.25rem 0 0; color: var(--text-strong); font-size: 1.2rem; font-weight: 720; }
+.comparison-expanded-header p { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.72rem; }
+.comparison-expanded-header > button { display: grid; width: 2rem; height: 2rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-muted); font-size: 1.25rem; line-height: 1; }
+.comparison-expanded-header > button:hover { border-color: var(--border-strong); background: var(--surface-soft); color: var(--text-strong); }
+.comparison-expanded-scroll { min-height: 0; flex: 1; overflow: auto; padding: 1.25rem; }
+.comparison-expanded-scroll .comparison-wrap { max-height: none; margin-top: 0; overflow: visible; }
+.comparison-expanded-scroll .comparison-grid { width: max-content; min-width: 100%; font-size: 0.75rem; }
+.comparison-expanded-scroll .comparison-grid th, .comparison-expanded-scroll .comparison-grid td { min-width: 190px; max-width: 300px; padding: 0.7rem; }
+.comparison-expanded-scroll .comparison-grid tr > :first-child { position: sticky; left: 0; z-index: 1; min-width: 170px; background: var(--surface); }
+.comparison-expanded-scroll .comparison-grid thead th { z-index: 2; background: var(--surface-soft); }
+.comparison-expanded-scroll .comparison-grid thead th:first-child { z-index: 3; }
+.comparison-expanded-scroll .comparison-value small { font-size: 0.62rem; }
 
 .resume-content { margin-top: 0.75rem; }
 .resume-question { display: grid; gap: 0.2rem; border-left: 2px solid #7c3aed; padding-left: 0.55rem; }

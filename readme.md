@@ -1,10 +1,29 @@
 # Trace — Git for your recurring decisions
 
+> An autonomous, local-first memory for research-backed decisions.
+
 ## Overview
 
-Trace is a tool that treats research-backed decisions the way git treats code changes — as first-class, revisitable objects with history, reasoning, evidence, and context.
+Trace treats research-backed decisions the way Git treats code changes: as first-class, revisitable objects with a working state, evidence, checkpoints, branches, outcomes, and history.
 
 Whenever people research an important decision—choosing a model, treatment, product, vendor, methodology, destination, or strategy—they open many sources, reach a conclusion, and eventually forget why. Later, when they revisit the same choice, they often repeat the investigation from zero. Trace preserves what they investigated, what they concluded, why they concluded it, and what changed when they revisited it.
+
+Trace is designed to require no filing ritual or approval queue. While the user browses, it identifies decision-relevant evidence, safely captures visual context, decides where that evidence belongs, updates a live research state, and creates durable checkpoints automatically. The result is a visual research story that answers:
+
+- What is the best current answer?
+- Which sources and screenshots support it?
+- What changed between research sessions?
+- Which questions remain unresolved, and where should research resume?
+- Did the decision work in practice?
+
+### How the decision loop works
+
+1. **Capture** — Chrome sends bounded page context and an approved visible-viewport screenshot; Chrome/Safari history watchers provide a resilient fallback.
+2. **Understand** — A privacy and decision-relevance gate rejects sensitive pages and ordinary browsing before the autonomous router chooses ignore, continue, branch, or new decision.
+3. **Work** — Relevant evidence updates the branch-owned working tree and live comparison immediately.
+4. **Commit** — After roughly 25 seconds without new evidence, Trace writes an in-progress or resolved checkpoint. A useful recommendation can resolve while minor validation remains visible.
+5. **Reconcile and revisit** — Compatible branches reconcile automatically, materially different contexts remain separate, and closed decisions can reopen when relevant evidence returns.
+6. **Learn from outcomes** — The user can record whether a decision worked, was mixed, was regretted, or was superseded; that result becomes part of future retrieval.
 
 ## Core Concepts
 
@@ -32,18 +51,53 @@ Whenever people research an important decision—choosing a model, treatment, pr
 - **UI:** Native menu bar app (SwiftUI) + localhost web dashboard
 - **Workflow integration:** Read-only local MCP server; Qoder is the first supported example
 
-### Agents
+### High-level system architecture
 
-1. **Ingestion Agent** — Receives immediate Chrome navigation context from the Trace extension, watches Chrome/Safari history as a fallback, and watches optional screenshot folders. Approved Chrome research pages receive a visible-viewport screenshot without macOS Screen Recording access.
-2. **Autonomous Router** — Enriches public pages, ignores ordinary browsing, retrieves relevant context, and chooses new thread / same branch / new branch without requiring approval
-3. **Checkpoint Agent** — Updates the working tree immediately and writes an in-progress or resolved commit after 25 seconds of inactivity (or sooner when the research reaches a conclusion). Actionable defaults resolve when remaining questions are only validation or refinement.
-4. **Resurfacing Agent** — Detects reopens, generates diffs, pushes nudges
+```mermaid
+flowchart LR
+    U["Research in Chrome or Safari"] --> C["Capture layer"]
+
+    subgraph Capture["Local capture"]
+        E["Chrome extension<br/>page context + viewport screenshot"]
+        H["Chrome/Safari history watchers<br/>event-driven fallback"]
+        M["Trace menu-bar app<br/>capture policy + status"]
+    end
+
+    C --> E
+    C --> H
+    M <--> S
+    E --> S["Trace service<br/>Fastify + autonomous coordinator"]
+    H --> S
+
+    S --> G["Privacy + relevance gate"]
+    G --> R["AI router<br/>ignore · continue · branch · new decision"]
+    R --> W["Working state + live comparison"]
+    W --> K["Checkpoint + reconciliation"]
+    K --> D[("Local SQLite<br/>decision history + asset metadata")]
+    E --> A[("Local screenshot assets")]
+
+    D --> UI["Web dashboard<br/>decision map · resume · outcomes"]
+    A --> UI
+    D --> MCP["Read-only Trace MCP server"]
+    MCP --> Q["Qoder and future integrations"]
+
+    O["OpenClaw schedules"] -. "5m recovery · 15m reconcile · weekly digest" .-> S
+```
+
+The event-driven Trace service owns the normal hot path. OpenClaw does not process every browser visit; it provides scheduled recovery, reconciliation, and digest safety nets.
+
+### Autonomous pipeline
+
+1. **Capture and ingestion** — Receives immediate Chrome navigation context, watches Chrome/Safari history as a fallback, and watches optional screenshot folders. Approved Chrome research pages receive a visible-viewport screenshot without macOS Screen Recording access.
+2. **Autonomous routing** — Enriches safe public pages, ignores ordinary browsing, retrieves relevant decisions and branches, and chooses new decision / same branch / new branch without requiring approval.
+3. **Working state and checkpointing** — Updates the working tree and source-backed comparison immediately, then writes an in-progress or resolved commit after 25 seconds of inactivity or sooner when a conclusion is reached.
+4. **Reconciliation and resurfacing** — Reconciles compatible branches, preserves meaningful divergence, generates context diffs, and resurfaces prior answers and outcomes when a decision returns.
 
 Routing and checkpoints operate on branch-owned source items. A closed thread continues on the same branch when its context is unchanged; Trace forks only when the goal or constraints materially differ. Every checkpoint immediately checks whether compatible branch conclusions can merge at 95%+ confidence; the 15-minute OpenClaw reconciliation job is only a safety net.
 
 ## UI Experience
 
-1. **Decisions** — The complete decision index is available from the top tab; opening a decision shows its canonical canvas research story. The canvas uses an automatic left-to-right layout with pan/zoom, temporary node dragging, context branches, checkpoints, current answer, screenshots, a live comparison, “You left off here,” and an outcome review after resolution.
+1. **Decisions** — The complete decision index is available from the top tab; opening a decision shows its canonical canvas research story. The canvas uses an automatic left-to-right layout with pan/zoom, temporary node dragging, context branches, checkpoints, current answer, screenshots, a live comparison, “You left off here,” and an outcome review after resolution. Wide comparison matrices expand into a near-fullscreen, independently scrollable view with sticky option and criterion labels.
 2. **Search** — Searches decision titles, verdicts, reasoning, and evidence, then opens the matching story directly.
 3. **Activity drawer** — Grouped checkpoints, resolved verdicts, revisits, nudges, and digests; it is an audit trail rather than a staging queue.
 4. **System drawer** — Live working trees, capture health/failure reasons, routing rationales, retryable errors, and recent automation. Automatic reconciliation is named explicitly; the decision workspace exposes reconciliation only as a **Manual override**.
@@ -65,22 +119,23 @@ Selecting a map node expands its detail inside the canvas and reflows surroundin
 - [Implementation Log](./implementation.md) — Latest implementation progress and decisions
 - [Hackathon Demo Script](./demo-script.md) — Timed 2:45 video plan with screen actions and voiceover
 
-## MVP Timeline (4 weeks)
+## Implemented v1
 
-| Week | Focus |
-|------|-------|
-| 1 | Spec + ingestion pipeline (screenshot watcher, OCR, browser history, data model) |
-| 2 | Clustering + synthesis agents, manual correction flow |
-| 3 | Resurfacing, diff generation, dashboard UI |
-| 4 | Menu bar app, polish, demo prep |
+- Near-real-time Chrome capture with visible screenshots and conservative Chrome/Safari history fallback
+- Fully autonomous relevance filtering, semantic routing, branch creation, working-state updates, checkpointing, and high-confidence reconciliation
+- Local SQLite decision history with durable screenshot thumbnails, comparisons, corrections, audit actions, and outcomes
+- Canvas-first decision workspace with current answer, evidence, research paths, Resume Research, expanded comparison, and after-action review
+- Retryable and reversible automation with OpenClaw recovery schedules
+- Read-only MCP retrieval for Qoder and other compatible clients
 
 ## Prerequisites
 
 - macOS 13+ (Ventura or later)
 - Node.js 22+ (`node --version`)
 - pnpm (`npm install -g pnpm`)
-- OpenClaw (`npm install -g openclaw@latest`) — for scheduled agent jobs
-- Xcode 15+ / Swift 5.9+ — for the menu bar app (optional)
+- OpenClaw (`npm install -g openclaw@latest`) — optional, for scheduled recovery/reconciliation/digest jobs
+- Xcode 15+ / Swift 5.9+ — required by the full `start.sh` flow to build the menu-bar app
+- Chrome — required for automatic visible-page screenshots; Safari remains history-only in v1
 
 ## Setup
 
@@ -96,11 +151,13 @@ Selecting a map node expands its detail inside the canvas and reflows surroundin
    OPENAI_API_KEY=sk-your-key-here
    ```
 
-3. **Create runtime directory:**
+3. **Optional: install a user config override:**
    ```bash
    mkdir -p ~/.trace
    cp trace.config.json ~/.trace/config.json
    ```
+
+   Trace creates `~/.trace` automatically and falls back to the project `trace.config.json`, so this step is needed only when you want user-specific settings.
 
 4. **Install OpenClaw skills and declare scheduled jobs (optional):**
    ```bash
@@ -122,7 +179,7 @@ This builds the dashboard and native menu app, serves the API and dashboard at `
 
 `stop.sh` and Ctrl+C perform a full shutdown: they stop the native menu app and Trace service, remove the Chrome bridge token and registration, stop OpenClaw, and uninstall its LaunchAgent so it cannot restart at login. The next `start.sh` reinstalls the local services when needed.
 
-Automatic Chrome screenshots require one one-time extension install. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `browser-extension/` in this repository. Chrome shows broad page access because automatic `captureVisibleTab` cannot use the click-only `activeTab` permission. Incognito is disabled, and localhost, internal, login, payment, mail, banking, and health pages are excluded before any known-page or manual priority is considered. After installation, normal use is still only `./scripts/start.sh`; turn **Automatic browser screenshots** on or off from the Trace menu. No macOS Screen Recording permission is needed.
+Automatic Chrome screenshots require a one-time extension install. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `browser-extension/` in this repository. Chrome shows broad page access because automatic `captureVisibleTab` cannot use the click-only `activeTab` permission. Incognito is disabled, and localhost, internal, login, payment, mail, banking, and health pages are excluded before any known-page or manual priority is considered. After installation, normal use is still only `./scripts/start.sh`; turn **Automatic browser screenshots** on or off from the Trace menu. No macOS Screen Recording permission is needed.
 
 The extension waits two seconds after a completed navigation, sends bounded title/URL/visible text to the local service, and captures only after Trace approves the candidate and verifies the same tab is still active. It records the visible viewport—the state you actually saw—then creates a full JPEG, thumbnail, and visual hash locally. Screenshot pixels and page context may be sent to your configured OpenAI model as part of autonomous routing.
 
@@ -136,14 +193,54 @@ The live router is fully automatic. It records every decision and rationale in `
 
 ### Qoder MCP integration
 
-Trace includes a project-scoped, read-only STDIO MCP server configured in `.mcp.json`. Build Trace once, then restart Qoder or run `/mcp reload`:
+Trace exposes five read-only tools through an official MCP SDK STDIO server:
+
+- `search_decisions(query)`
+- `get_decision_trace(id)`
+- `get_current_answer(id)`
+- `get_relevant_constraints(topic)`
+- `get_prior_regrets(topic)`
+
+The MCP process opens the same local SQLite database in read-only mode and exits when its client closes the STDIO connection. It does not require the Trace dashboard or service to be running.
+
+#### Qoder CLI
+
+The repository includes a project-scoped `.mcp.json`. Build Trace, start Qoder CLI from the repository, and verify the connection:
 
 ```bash
 pnpm build
+cd /absolute/path/to/Trace
 qodercli mcp list
 ```
 
-Qoder discovers `search_decisions`, `get_decision_trace`, `get_current_answer`, `get_relevant_constraints`, and `get_prior_regrets`. The process opens the same local SQLite database in read-only mode and exits when Qoder closes the STDIO connection; it does not require the Trace web service to be running. A useful Agent Mode prompt is: “Before choosing this database, search my prior Trace decisions and check whether this project's constraints require a different branch.”
+Inside an interactive **Qoder CLI** session, `/mcp reload` refreshes MCP configuration. That slash command is CLI-only.
+
+#### Qoder desktop app
+
+The desktop app maintains its own MCP registration. Do not type `/mcp reload` into an Agent chat—it will be treated as an ordinary prompt. Instead:
+
+1. Open **Qoder Settings** (`⌘ ⇧ ,`) and select **MCP**.
+2. In **My Servers**, choose **+ Add**.
+3. Add Trace with absolute paths, replacing both placeholders with the output of `command -v node` and the location of this repository:
+
+```json
+{
+  "mcpServers": {
+    "trace": {
+      "command": "/absolute/path/to/node",
+      "args": [
+        "/absolute/path/to/Trace/packages/service/dist/mcp.js"
+      ]
+    }
+  }
+}
+```
+
+If Qoder shows an existing `mcpServers` object, add the `trace` entry alongside the existing servers instead of replacing them.
+
+4. Save, confirm the connected link icon, and expand the server to verify all five tools.
+
+In Qoder **Agent Mode**, a useful prompt is: “Before making this choice, search my prior Trace decisions, recover the current answer and constraints, and tell me what still needs validation.” Qoder may request confirmation before the first MCP call.
 
 `browserHistoryDebounceMs` controls event coalescing, while `browserHistoryPollIntervalMs` controls only the fallback heartbeat. The defaults are 1,500 ms and 120,000 ms respectively.
 
@@ -241,7 +338,9 @@ packages/
 ├── core/              # Shared: data model, DB, AI client, agents
 ├── service/           # API server (Fastify) + ingestion watchers
 └── dashboard/         # React web UI (Vite + Tailwind)
+browser-extension/     # Manifest V3 Chrome page/screenshot capture
 skills/                # OpenClaw skill definitions
-menubar/Trace/       # Native SwiftUI menu bar app
-scripts/               # Setup and start scripts
+menubar/Trace/         # Native SwiftUI menu-bar app
+scripts/               # Lifecycle, migration, seed, and OpenClaw setup scripts
+.mcp.json              # Project-scoped read-only Trace MCP server
 ```

@@ -170,6 +170,35 @@ describe('ThreadGraph', () => {
     fireEvent.click(screen.getByText('Worked'));
     await waitFor(() => expect(setOutcome).toHaveBeenCalledWith('worked', 'It stayed reliable.'));
   });
+
+  it('opens the live comparison in an expanded scrollable dialog', () => {
+    const now = new Date().toISOString();
+    const { container } = render(<ThreadGraph
+      tree={{ nodes: [{ id: 'commit1', type: 'commit', branchId: null, regret: false, createdAt: now }], edges: [] }}
+      commits={[{ id: 'commit1', parentId: null, branchId: 'branch1', verdictSummary: 'Compare architectures', reasoning: 'Review the evidence', createdAt: now, regret: false, sourceItems: [] }]}
+      comparison={{
+        options: [
+          { id: 'resnet', label: 'ResNet' },
+          { id: 'densenet', label: 'DenseNet' },
+          { id: 'unet', label: 'U-Net' },
+          { id: 'transformer', label: 'Transformer' },
+        ],
+        criteria: [{ id: 'quality', label: 'Quality' }],
+        cells: [{ optionId: 'resnet', criterionId: 'quality', value: 'Strong baseline', status: 'supported', sourceItemIds: ['source1'] }],
+      }}
+    />);
+
+    const expand = container.querySelector<HTMLButtonElement>('.comparison-expand-button');
+    expect(expand).toBeTruthy();
+    fireEvent.click(expand!);
+    const dialog = screen.getByRole('dialog', { name: 'Expanded live comparison' });
+    expect(dialog.textContent).toContain('ResNet');
+    expect(dialog.textContent).toContain('Transformer');
+    expect(dialog.querySelector('.comparison-expanded-scroll')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close expanded comparison' }));
+    expect(screen.queryByRole('dialog', { name: 'Expanded live comparison' })).toBeNull();
+  });
 });
 
 describe('Unified layout', () => {
